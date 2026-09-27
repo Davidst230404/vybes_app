@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\AvailabilityController;
+use App\Http\Controllers\Api\BookingController;
+use App\Http\Controllers\Api\PaymentController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -46,3 +48,22 @@ Route::get(
     '/resources/{resource}/availability',
     [AvailabilityController::class, 'check']
 );
+
+
+/*
+|--------------------------------------------------------------------------
+| Booking
+|--------------------------------------------------------------------------
+*/
+
+Route::middleware('auth:sanctum')->group(function () {
+
+    // Create booking hold
+    Route::post('/bookings', [BookingController::class, 'store']);
+
+    // Create payment session
+    Route::post(
+        '/bookings/{booking}/payment-session',
+        [PaymentController::class, 'createSession']
+    );
+});

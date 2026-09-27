@@ -14,6 +14,7 @@ class Resource extends Model
         'slug',
         'description',
         'capacity',
+        'base_price',
         'type',
         'status',
     ];
@@ -22,28 +23,20 @@ class Resource extends Model
     {
         return [
             'capacity' => 'integer',
+            'base_price' => 'decimal:2',
         ];
     }
 
-    /**
-     * Resource dimiliki oleh Venue.
-     */
     public function venue(): BelongsTo
     {
         return $this->belongsTo(Venue::class);
     }
 
-    /**
-     * Resource memiliki banyak Schedule.
-     */
     public function schedules(): HasMany
     {
         return $this->hasMany(Schedule::class);
     }
 
-    /**
-     * Resource memiliki banyak Booking Item.
-     */
     public function bookingItems(): HasMany
     {
         return $this->hasMany(BookingItem::class);
