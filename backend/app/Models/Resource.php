@@ -40,4 +40,12 @@ class Resource extends Model
     {
         return $this->hasMany(Schedule::class);
     }
+
+    /**
+     * Resource memiliki banyak Booking Item.
+     */
+    public function bookingItems(): HasMany
+    {
+        return $this->hasMany(BookingItem::class);
+    }
 }
