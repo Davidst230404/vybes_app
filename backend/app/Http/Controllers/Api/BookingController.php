@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Booking;
 use App\Models\Resource;
 use App\Services\BookingService;
 use Carbon\Carbon;
@@ -11,6 +12,24 @@ use Illuminate\Http\Request;
 
 class BookingController extends Controller
 {
+    public function index(Request $request): JsonResponse
+    {
+        $bookings = $request->user()
+            ->bookings()
+            ->with([
+                'venue',
+                'items.resource',
+                'paymentSession',
+                'payment',
+            ])
+            ->latest()
+            ->paginate(10);
+
+        return response()->json([
+            'data' => $bookings,
+        ]);
+    }
+
     public function store(
         Request $request,
         BookingService $bookingService
@@ -40,5 +59,29 @@ class BookingController extends Controller
                 'booking' => $booking,
             ],
         ], 201);
+    }
+
+    public function show(
+        Request $request,
+        Booking $booking
+    ): JsonResponse {
+        if ($booking->user_id !== $request->user()->id) {
+            return response()->json([
+                'message' => 'You are not allowed to access this booking.',
+            ], 403);
+        }
+
+        $booking->load([
+            'venue',
+            'items.resource',
+            'paymentSession',
+            'payment',
+        ]);
+
+        return response()->json([
+            'data' => [
+                'booking' => $booking,
+            ],
+        ]);
     }
 }

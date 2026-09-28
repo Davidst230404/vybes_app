@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\AvailabilityController;
 use App\Http\Controllers\Api\BookingController;
 use App\Http\Controllers\Api\PaymentController;
+use App\Http\Controllers\Api\XenditWebhookController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -58,8 +59,23 @@ Route::get(
 
 Route::middleware('auth:sanctum')->group(function () {
 
+    // Get user's bookings
+    Route::get(
+        '/bookings',
+        [BookingController::class, 'index']
+    );
+
     // Create booking hold
-    Route::post('/bookings', [BookingController::class, 'store']);
+    Route::post(
+        '/bookings',
+        [BookingController::class, 'store']
+    );
+
+    // Get booking detail
+    Route::get(
+        '/bookings/{booking}',
+        [BookingController::class, 'show']
+    );
 
     // Create payment session
     Route::post(
@@ -67,3 +83,15 @@ Route::middleware('auth:sanctum')->group(function () {
         [PaymentController::class, 'createSession']
     );
 });
+
+/*
+|--------------------------------------------------------------------------
+| Xendit Webhook
+|--------------------------------------------------------------------------
+*/
+
+// Receive payment notifications from Xendit
+Route::post(
+    '/webhooks/xendit',
+    [XenditWebhookController::class, 'handle']
+);

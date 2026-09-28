@@ -12,6 +12,7 @@ class Payment extends Model
         'payment_session_id',
         'payment_code',
         'provider',
+        'provider_request_id',
         'provider_transaction_id',
         'method',
         'status',

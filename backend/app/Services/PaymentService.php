@@ -46,13 +46,54 @@ class PaymentService
                 'booking_id' => $paymentSession->booking_id,
                 'payment_session_id' => $paymentSession->id,
                 'payment_code' => $this->generatePaymentCode(),
-                'provider' => null,
+                'provider' => 'xendit',
+                'provider_request_id' => null,
                 'provider_transaction_id' => null,
-                'method' => null,
+                'method' => 'QRIS',
                 'status' => 'pending',
                 'amount' => $paymentSession->amount,
             ]);
         });
+    }
+
+    public function createXenditPayment(
+        Payment $payment,
+        XenditService $xenditService
+    ): Payment {
+        $payment = Payment::query()
+            ->with([
+                'booking',
+                'paymentSession',
+            ])
+            ->whereKey($payment->id)
+            ->firstOrFail();
+
+        if ($payment->status !== 'pending') {
+            throw ValidationException::withMessages([
+                'payment' => [
+                    'The payment is not pending.',
+                ],
+            ]);
+        }
+
+        if ($payment->provider_request_id) {
+            return $payment;
+        }
+
+        $response = $xenditService->createQrisPayment($payment);
+
+        $payment->update([
+            'provider' => 'xendit',
+            'provider_request_id' => $response['payment_request_id'] ?? null,
+            'provider_transaction_id' => $response['latest_payment_id'] ?? null,
+            'method' => 'QRIS',
+            'provider_payload' => $response,
+        ]);
+
+        return $payment->fresh([
+            'booking',
+            'paymentSession',
+        ]);
     }
 
     private function generatePaymentCode(): string
