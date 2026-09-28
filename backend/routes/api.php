@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\AvailabilityController;
 use App\Http\Controllers\Api\BookingController;
+use App\Http\Controllers\Api\CheckInController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\XenditWebhookController;
 use Illuminate\Support\Facades\Route;
@@ -53,7 +54,7 @@ Route::get(
 
 /*
 |--------------------------------------------------------------------------
-| Booking
+| Booking & Check-in
 |--------------------------------------------------------------------------
 */
 
@@ -77,12 +78,25 @@ Route::middleware('auth:sanctum')->group(function () {
         [BookingController::class, 'show']
     );
 
+    // Get digital ticket
+    Route::get(
+        '/bookings/{booking}/ticket',
+        [BookingController::class, 'ticket']
+    );
+
     // Create payment session
     Route::post(
         '/bookings/{booking}/payment-session',
         [PaymentController::class, 'createSession']
     );
+
+    // Check-in ticket
+    Route::post(
+        '/check-in',
+        [CheckInController::class, 'checkIn']
+    );
 });
+
 
 /*
 |--------------------------------------------------------------------------
