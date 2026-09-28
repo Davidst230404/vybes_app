@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Booking;
+use App\Models\BookingTicket;
 use App\Models\Payment;
 use App\Models\PaymentSession;
 use Illuminate\Http\JsonResponse;
@@ -184,6 +185,26 @@ class XenditWebhookController extends Controller
                 'status' => 'confirmed',
                 'confirmed_at' => now(),
             ]);
+
+            /*
+            |--------------------------------------------------------------------------
+            | Create digital ticket
+            |--------------------------------------------------------------------------
+            */
+
+            BookingTicket::firstOrCreate(
+                [
+                    'booking_id' => $booking->id,
+                ],
+                [
+                    'ticket_code' => $this->generateTicketCode(),
+                    'status' => 'active',
+                    'qr_payload' => $this->generateQrPayload(
+                        $booking
+                    ),
+                    'issued_at' => now(),
+                ]
+            );
         });
     }
 
@@ -266,5 +287,33 @@ class XenditWebhookController extends Controller
                 ]);
             }
         });
+    }
+
+    /**
+     * Generate unique ticket code.
+     */
+    private function generateTicketCode(): string
+    {
+        do {
+            $code = 'VYB-TKT-' . strtoupper(
+                substr(bin2hex(random_bytes(5)), 0, 10)
+            );
+        } while (
+            BookingTicket::where('ticket_code', $code)->exists()
+        );
+
+        return $code;
+    }
+
+    /**
+     * Generate data yang nantinya digunakan sebagai QR payload.
+     */
+    private function generateQrPayload(Booking $booking): string
+    {
+        return json_encode([
+            'type' => 'VYBES_TICKET',
+            'booking_id' => $booking->id,
+            'booking_code' => $booking->booking_code,
+        ]);
     }
 }

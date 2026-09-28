@@ -78,4 +78,12 @@ class Booking extends Model
     {
         return $this->hasOne(Payment::class);
     }
+
+    /**
+     * Booking memiliki satu Digital Ticket.
+     */
+    public function ticket(): HasOne
+    {
+        return $this->hasOne(BookingTicket::class);
+    }
 }
