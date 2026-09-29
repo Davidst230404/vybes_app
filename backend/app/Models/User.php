@@ -39,6 +39,16 @@ class User extends Authenticatable
     }
 
     /**
+     * Relasi User → Organizer
+     *
+     * Satu user dapat memiliki satu profil organizer.
+     */
+    public function organizer(): HasOne
+    {
+        return $this->hasOne(Organizer::class);
+    }
+
+    /**
      * Relasi User → Bookings
      *
      * Satu user dapat memiliki banyak booking.
@@ -46,6 +56,16 @@ class User extends Authenticatable
     public function bookings(): HasMany
     {
         return $this->hasMany(Booking::class);
+    }
+
+    /**
+     * Relasi User → Event Ticket Orders
+     *
+     * Satu user dapat memiliki banyak order tiket event.
+     */
+    public function eventTicketOrders(): HasMany
+    {
+        return $this->hasMany(EventTicketOrder::class);
     }
 
     /**

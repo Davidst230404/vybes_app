@@ -55,4 +55,12 @@ class Venue extends Model
     {
         return $this->hasMany(Resource::class);
     }
+
+    /**
+     * Venue dapat digunakan untuk banyak Event.
+     */
+    public function events(): HasMany
+    {
+        return $this->hasMany(Event::class);
+    }
 }

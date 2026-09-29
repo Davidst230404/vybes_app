@@ -4,6 +4,9 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\AvailabilityController;
 use App\Http\Controllers\Api\BookingController;
 use App\Http\Controllers\Api\CheckInController;
+use App\Http\Controllers\Api\EventTicketOrderController;
+use App\Http\Controllers\Api\OrganizerEventController;
+use App\Http\Controllers\Api\OrganizerTicketTypeController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\XenditWebhookController;
 use Illuminate\Support\Facades\Route;
@@ -94,6 +97,96 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post(
         '/check-in',
         [CheckInController::class, 'checkIn']
+    );
+});
+
+
+/*
+|--------------------------------------------------------------------------
+| Event Ticket Orders
+|--------------------------------------------------------------------------
+*/
+
+Route::middleware('auth:sanctum')->group(function () {
+
+    // Create temporary ticket order / hold
+    Route::post(
+        '/events/{event}/ticket-orders',
+        [EventTicketOrderController::class, 'store']
+    );
+
+    // Get customer's ticket order
+    Route::get(
+        '/event-ticket-orders/{order}',
+        [EventTicketOrderController::class, 'show']
+    );
+
+    // Cancel ticket order
+    Route::post(
+        '/event-ticket-orders/{order}/cancel',
+        [EventTicketOrderController::class, 'cancel']
+    );
+});
+
+
+/*
+|--------------------------------------------------------------------------
+| Organizer Events
+|--------------------------------------------------------------------------
+*/
+
+Route::middleware('auth:sanctum')->group(function () {
+
+    // Get organizer events
+    Route::get(
+        '/organizer/events',
+        [OrganizerEventController::class, 'index']
+    );
+
+    // Create event
+    Route::post(
+        '/organizer/events',
+        [OrganizerEventController::class, 'store']
+    );
+
+    // Get event detail
+    Route::get(
+        '/organizer/events/{event}',
+        [OrganizerEventController::class, 'show']
+    );
+});
+
+
+/*
+|--------------------------------------------------------------------------
+| Organizer Ticket Types
+|--------------------------------------------------------------------------
+*/
+
+Route::middleware('auth:sanctum')->group(function () {
+
+    // Get ticket types
+    Route::get(
+        '/organizer/events/{event}/ticket-types',
+        [OrganizerTicketTypeController::class, 'index']
+    );
+
+    // Create ticket type
+    Route::post(
+        '/organizer/events/{event}/ticket-types',
+        [OrganizerTicketTypeController::class, 'store']
+    );
+
+    // Update ticket type
+    Route::put(
+        '/organizer/events/{event}/ticket-types/{ticketType}',
+        [OrganizerTicketTypeController::class, 'update']
+    );
+
+    // Delete ticket type
+    Route::delete(
+        '/organizer/events/{event}/ticket-types/{ticketType}',
+        [OrganizerTicketTypeController::class, 'destroy']
     );
 });
 
