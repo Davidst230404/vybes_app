@@ -9,6 +9,7 @@ class Payment extends Model
 {
     protected $fillable = [
         'booking_id',
+        'event_ticket_order_id',
         'payment_session_id',
         'payment_code',
         'provider',
@@ -36,6 +37,11 @@ class Payment extends Model
     public function booking(): BelongsTo
     {
         return $this->belongsTo(Booking::class);
+    }
+
+    public function eventTicketOrder(): BelongsTo
+    {
+        return $this->belongsTo(EventTicketOrder::class);
     }
 
     public function paymentSession(): BelongsTo

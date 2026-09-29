@@ -60,9 +60,15 @@ class XenditService
             'request_amount' => (float) $payment->amount,
             'capture_method' => 'AUTOMATIC',
             'channel_code' => 'QRIS',
+
             'metadata' => [
                 'payment_id' => (string) $payment->id,
-                'booking_id' => (string) $payment->booking_id,
+                'booking_id' => $payment->booking_id !== null
+                    ? (string) $payment->booking_id
+                    : null,
+                'event_ticket_order_id' => $payment->event_ticket_order_id !== null
+                    ? (string) $payment->event_ticket_order_id
+                    : null,
                 'payment_code' => $payment->payment_code,
             ],
         ];

@@ -34,6 +34,22 @@ class PaymentService
                 ]);
             }
 
+            /*
+             * A payment session must belong to either:
+             * - a regular booking
+             * - an event ticket order
+             */
+            if (
+                $paymentSession->booking_id === null &&
+                $paymentSession->event_ticket_order_id === null
+            ) {
+                throw ValidationException::withMessages([
+                    'payment_session' => [
+                        'The payment session has no payable order.',
+                    ],
+                ]);
+            }
+
             $existingPayment = Payment::query()
                 ->where('payment_session_id', $paymentSession->id)
                 ->first();
@@ -44,6 +60,7 @@ class PaymentService
 
             return Payment::create([
                 'booking_id' => $paymentSession->booking_id,
+                'event_ticket_order_id' => $paymentSession->event_ticket_order_id,
                 'payment_session_id' => $paymentSession->id,
                 'payment_code' => $this->generatePaymentCode(),
                 'provider' => 'xendit',
@@ -63,6 +80,7 @@ class PaymentService
         $payment = Payment::query()
             ->with([
                 'booking',
+                'eventTicketOrder',
                 'paymentSession',
             ])
             ->whereKey($payment->id)
@@ -92,6 +110,7 @@ class PaymentService
 
         return $payment->fresh([
             'booking',
+            'eventTicketOrder',
             'paymentSession',
         ]);
     }

@@ -5,8 +5,11 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Booking;
 use App\Models\BookingTicket;
+use App\Models\EventTicketOrder;
 use App\Models\Payment;
 use App\Models\PaymentSession;
+use App\Services\EventTicketPurchaseService;
+use App\Services\EventTicketService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -129,83 +132,145 @@ class XenditWebhookController extends Controller
 
             /*
             |--------------------------------------------------------------------------
-            | Update booking
+            | Booking payment
             |--------------------------------------------------------------------------
             */
 
-            $booking = Booking::query()
-                ->whereKey($payment->booking_id)
-                ->lockForUpdate()
-                ->first();
-
-            if (!$booking) {
-                return;
+            if ($payment->booking_id !== null) {
+                $this->confirmBooking($payment);
             }
 
             /*
             |--------------------------------------------------------------------------
-            | Only confirm an active booking hold
+            | Event ticket payment
             |--------------------------------------------------------------------------
             */
 
-            if ($booking->status !== 'held') {
-                return;
+            if ($payment->event_ticket_order_id !== null) {
+                $this->confirmEventTicketOrder($payment);
             }
+        });
+    }
 
-            /*
-            |--------------------------------------------------------------------------
-            | Do not confirm an expired booking
-            |--------------------------------------------------------------------------
-            */
+    /**
+     * Confirm normal booking after successful payment.
+     */
+    private function confirmBooking(Payment $payment): void
+    {
+        $booking = Booking::query()
+            ->whereKey($payment->booking_id)
+            ->lockForUpdate()
+            ->first();
 
-            if (
-                $booking->hold_expires_at !== null &&
-                $booking->hold_expires_at->isPast()
-            ) {
-                $booking->update([
-                    'status' => 'cancelled',
-                    'cancelled_at' => now(),
-                    'notes' => trim(
-                        ($booking->notes ?? '') .
-                        ' Payment captured after booking hold expired. ' .
-                        'Manual refund handling is required.'
-                    ),
-                ]);
+        if (!$booking) {
+            return;
+        }
 
-                return;
-            }
+        /*
+        |--------------------------------------------------------------------------
+        | Only confirm an active booking hold
+        |--------------------------------------------------------------------------
+        */
 
-            /*
-            |--------------------------------------------------------------------------
-            | Confirm booking
-            |--------------------------------------------------------------------------
-            */
+        if ($booking->status !== 'held') {
+            return;
+        }
 
+        /*
+        |--------------------------------------------------------------------------
+        | Do not confirm an expired booking
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+            $booking->hold_expires_at !== null &&
+            $booking->hold_expires_at->isPast()
+        ) {
             $booking->update([
-                'status' => 'confirmed',
-                'confirmed_at' => now(),
+                'status' => 'cancelled',
+                'cancelled_at' => now(),
+                'notes' => trim(
+                    ($booking->notes ?? '') .
+                    ' Payment captured after booking hold expired. ' .
+                    'Manual refund handling is required.'
+                ),
             ]);
 
-            /*
-            |--------------------------------------------------------------------------
-            | Create digital ticket
-            |--------------------------------------------------------------------------
-            */
+            return;
+        }
 
-            BookingTicket::firstOrCreate(
-                [
-                    'booking_id' => $booking->id,
-                ],
-                [
-                    'ticket_code' => $this->generateTicketCode(),
-                    'status' => 'active',
-                    'qr_payload' => $this->generateQrPayload(
-                        $booking
-                    ),
-                    'issued_at' => now(),
-                ]
-            );
-        });
+        /*
+        |--------------------------------------------------------------------------
+        | Confirm booking
+        |--------------------------------------------------------------------------
+        */
+
+        $booking->update([
+            'status' => 'confirmed',
+            'confirmed_at' => now(),
+        ]);
+
+        /*
+        |--------------------------------------------------------------------------
+        | Create digital ticket
+        |--------------------------------------------------------------------------
+        */
+
+        BookingTicket::firstOrCreate(
+            [
+                'booking_id' => $booking->id,
+            ],
+            [
+                'ticket_code' => $this->generateTicketCode(),
+                'status' => 'active',
+                'qr_payload' => $this->generateQrPayload(
+                    $booking
+                ),
+                'issued_at' => now(),
+            ]
+        );
+    }
+
+    /**
+     * Confirm event ticket order after successful payment
+     * and generate individual event tickets.
+     */
+    private function confirmEventTicketOrder(Payment $payment): void
+    {
+        $order = EventTicketOrder::query()
+            ->whereKey($payment->event_ticket_order_id)
+            ->lockForUpdate()
+            ->first();
+
+        if (!$order) {
+            return;
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Confirm order
+        |--------------------------------------------------------------------------
+        */
+
+        if ($order->status === 'held') {
+            $purchaseService = app(EventTicketPurchaseService::class);
+
+            $order = $purchaseService->confirmOrder($order);
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Generate individual event tickets
+        |--------------------------------------------------------------------------
+        */
+
+        if ($order->status !== 'confirmed') {
+            return;
+        }
+
+        $ticketService = app(EventTicketService::class);
+
+        $ticketService->generateTickets($order);
     }
 
     private function handlePaymentFailure(array $data): void
@@ -290,7 +355,7 @@ class XenditWebhookController extends Controller
     }
 
     /**
-     * Generate unique ticket code.
+     * Generate unique booking ticket code.
      */
     private function generateTicketCode(): string
     {
@@ -306,7 +371,7 @@ class XenditWebhookController extends Controller
     }
 
     /**
-     * Generate data yang nantinya digunakan sebagai QR payload.
+     * Generate booking QR payload.
      */
     private function generateQrPayload(Booking $booking): string
     {

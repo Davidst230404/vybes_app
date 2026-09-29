@@ -5,6 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Fillable([
     'order_code',
@@ -37,6 +39,24 @@ class EventTicketOrder extends Model
         return $this->belongsTo(
             EventTicketType::class,
             'event_ticket_type_id'
+        );
+    }
+
+    public function paymentSession(): HasOne
+    {
+        return $this->hasOne(PaymentSession::class);
+    }
+
+    public function payment(): HasOne
+    {
+        return $this->hasOne(Payment::class);
+    }
+
+    public function tickets(): HasMany
+    {
+        return $this->hasMany(
+            EventTicket::class,
+            'event_ticket_order_id'
         );
     }
 
