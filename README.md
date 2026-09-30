@@ -21,9 +21,9 @@
 
 ## Tentang VYBES
 
-**VYBES Backend** merupakan core API layer dari **VYBES**, platform digital untuk discovery, booking, event ticketing, pembayaran, dan validasi akses.
+**VYBES Backend** merupakan core API layer dari **VYBES Apps**, platform digital untuk discovery, booking, event ticketing, pembayaran, dan validasi akses.
 
-Backend menangani business logic utama yang menghubungkan aplikasi customer, merchant, organizer, serta kebutuhan operasional platform.
+Backend yang menangani business logic utama yang menghubungkan aplikasi customer, merchant, organizer, serta kebutuhan operasional platform.
 
 Fokus utama backend:
 
