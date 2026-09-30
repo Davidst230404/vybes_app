@@ -179,6 +179,80 @@ class XenditService
     }
 
     /**
+     * Create a refund for a successful Xendit payment request.
+     *
+     * The refund reference ID is generated internally by VYBES
+     * and passed to Xendit for end-to-end traceability.
+     */
+    public function createRefund(
+        Payment $payment,
+        float $amount,
+        string $reason = 'DUPLICATE',
+        ?string $referenceId = null
+    ): array {
+        if ($payment->provider !== 'xendit') {
+            throw new RuntimeException(
+                'Refund is only supported for Xendit payments.'
+            );
+        }
+
+        if ($payment->status !== 'paid') {
+            throw new RuntimeException(
+                'Only paid payments can be refunded.'
+            );
+        }
+
+        if (!$payment->provider_request_id) {
+            throw new RuntimeException(
+                'Xendit payment request ID is missing.'
+            );
+        }
+
+        if ($amount <= 0) {
+            throw new RuntimeException(
+                'Refund amount must be greater than zero.'
+            );
+        }
+
+        if ($amount > (float) $payment->amount) {
+            throw new RuntimeException(
+                'Refund amount cannot exceed the payment amount.'
+            );
+        }
+
+        /*
+         * Generate a fallback reference ID when the caller
+         * does not provide one.
+         */
+        $referenceId ??= 'VYB-REF-' .
+            strtoupper(
+                bin2hex(random_bytes(5))
+            );
+
+        $payload = [
+            'reference_id' => $referenceId,
+            'payment_request_id' => $payment->provider_request_id,
+            'amount' => $amount,
+            'reason' => $reason,
+            'currency' => 'IDR',
+        ];
+
+        $response = Http::withBasicAuth(
+            $this->secretKey,
+            ''
+        )
+            ->acceptJson()
+            ->post(
+                $this->apiUrl . '/refunds',
+                $payload
+            );
+
+        $this->handleError($response);
+
+        return $response->json();
+    }
+
+    /**
      * Handle Xendit API errors.
      */
     private function handleError(Response $response): void
