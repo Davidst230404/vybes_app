@@ -1,176 +1,624 @@
-# Vybes
+# VYBES Backend
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Laravel-13-FF2D20?style=for-the-badge&logo=laravel" alt="Laravel 13" />
-  <img src="https://img.shields.io/badge/PHP-8.3-777BB4?style=for-the-badge&logo=php" alt="PHP 8.3" />
-  <img src="https://img.shields.io/badge/PostgreSQL-17-336791?style=for-the-badge&logo=postgresql" alt="PostgreSQL 17" />
-  <img src="https://img.shields.io/badge/Redis-7-DC382D?style=for-the-badge&logo=redis" alt="Redis 7" />
+  <img src="https://readme-typing-svg.demolab.com?font=JetBrains+Mono&size=18&duration=2800&pause=900&color=D95F39&center=true&vCenter=true&width=760&lines=Booking+%7C+Event+Ticketing+%7C+Payment;Laravel+%2B+PostgreSQL+%2B+Redis+%2B+Docker;Secure+QR+Check-in+%7C+Xendit+Webhook+%7C+Refund;Built+as+the+transaction+engine+of+VYBES" alt="VYBES animation">
 </p>
 
-Vybes adalah platform digital commerce dan ticketing yang menghubungkan merchant, organizer, dan customer dalam satu ekosistem booking dan event management. Project ini dibangun sebagai solusi untuk pengelolaan ketersediaan sumber daya, pemesanan tiket acara, pembayaran digital, serta verifikasi kehadiran melalui sistem check-in berbasis QR.
+<p align="center">
+  <strong>Core API & Transaction Engine untuk Platform Booking dan Event Ticketing</strong>
+</p>
 
-## Project Snapshot
+<p align="center">
+  <img src="https://img.shields.io/badge/Laravel-13-FF2D20?style=for-the-badge&logo=laravel&logoColor=white">
+  <img src="https://img.shields.io/badge/PHP-8.3-777BB4?style=for-the-badge&logo=php&logoColor=white">
+  <img src="https://img.shields.io/badge/PostgreSQL-17-336791?style=for-the-badge&logo=postgresql&logoColor=white">
+  <img src="https://img.shields.io/badge/Redis-7-DC382D?style=for-the-badge&logo=redis&logoColor=white">
+  <img src="https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white">
+  <img src="https://img.shields.io/badge/Xendit-Payment-6C2CFF?style=for-the-badge">
+</p>
 
-- Product type: Booking & event ticketing platform
-- Primary stack: Laravel + PHP + PostgreSQL + Redis + Docker
-- Payment gateway: Xendit
-- Use cases:
-  - booking resource / venue / service
-  - ticket order for event
-  - payment session and QRIS-based checkout
-  - QR check-in and validation
-  - refund and late payment recovery
+---
 
-## Why This Project Exists
+## Tentang VYBES
 
-Vybes dibuat untuk menyederhanakan proses bisnis yang biasanya tersebar di beberapa kanal dan alat: mulai dari cek ketersediaan, pembuatan order, integrasi pembayaran, hingga validasi masuk di lokasi acara. Solusi ini dibuat agar proses operasional merchant dan organizer lebih cepat, lebih terukur, dan lebih aman.
+**VYBES Backend** merupakan core API layer dari **VYBES**, platform digital untuk discovery, booking, event ticketing, pembayaran, dan validasi akses.
 
-## Key Features
+Backend menangani business logic utama yang menghubungkan aplikasi customer, merchant, organizer, serta kebutuhan operasional platform.
 
-### 1. Resource Booking Management
-- cek ketersediaan resource
-- hold / temporary reservation
-- status pemesanan yang jelas
-- relasi booking dengan item dan tiket
+Fokus utama backend:
 
-### 2. Event Ticketing
-- pembuatan order tiket event
-- pembatasan dan validasi kuota tiket
-- pengelolaan tipe tiket
-- pembayaran untuk order event
+- Booking & availability
+- Event ticketing & quota management
+- Payment & Xendit integration
+- Refund & late-payment recovery
+- Signed QR ticket & check-in
+- Authentication dan role-based access
 
-### 3. Payment Integration
-- sesi pembayaran aman
-- integrasi Xendit untuk pembayaran QRIS
-- webhook handling untuk capture, failure, refund
-- mekanisme refund dan recovery payment
+> **Status:** Active Development — Real Product Project
 
-### 4. Check-In System
-- verifikasi kehadiran berbasis QR
-- support untuk booking ticket dan event ticket
-- proses check-in yang dapat dilakukan oleh merchant atau organizer
+---
 
-### 5. Role-Based Business Flow
-- merchant
-- organizer
-- customer / end user
-- pemisahan alur operasional antar role utama
+## Ringkasan Project
 
-## Architecture Overview
+VYBES dikembangkan dalam focused development window sekitar tiga bulan dengan milestone yang bergerak dari foundation hingga payment, ticketing, recovery, dan stabilization.
+
+Tahapan utama:
+
+1. Foundation dan system architecture
+2. Authentication dan role-based access
+3. Booking dan resource availability
+4. Event ticket order dan quota management
+5. Payment session dan Xendit integration
+6. QR ticket generation dan check-in
+7. Refund dan late-payment recovery
+8. QA, stabilization, dan persiapan release
+
+Target pengembangan diarahkan menuju **production readiness untuk release akhir tahun**, dengan scope dan prioritas mengikuti keputusan product/project management.
+
+---
+
+## Arsitektur
+
+VYBES menggunakan pendekatan **modular monolith** pada tahap pengembangan saat ini.
 
 ```text
-Client App / Mobile / Web
-        |
-        v
-Laravel API (backend)
-        |
-        +--> MySQL/PostgreSQL
-        +--> Redis
-        +--> Xendit Gateway
-        +--> QR / Check-In validation
+                         ┌──────────────────────┐
+                         │     VYBES Mobile     │
+                         │    React Native      │
+                         └──────────┬───────────┘
+                                    │ HTTPS / REST API
+                                    ▼
+                         ┌──────────────────────┐
+                         │      Nginx/API       │
+                         └──────────┬───────────┘
+                                    │
+                         ┌──────────▼───────────┐
+                         │    Laravel 13 API    │
+                         │                      │
+                         │ Auth / Booking       │
+                         │ Ticket / Payment     │
+                         │ Check-in / Refund    │
+                         └──────┬─────────┬─────┘
+                                │         │
+                    ┌───────────▼───┐ ┌──▼────────────┐
+                    │ PostgreSQL 17 │ │   Redis 7     │
+                    │ Source of Truth│ │ Cache / Queue │
+                    └───────────────┘ └───────────────┘
+                                │
+                         ┌──────▼───────┐
+                         │    Xendit    │
+                         │ Payment API  │
+                         │ + Webhooks   │
+                         └──────────────┘
 ```
 
-### Backend Modules
-- Auth and user management
-- Availability service
-- Booking and payment service
-- Event ticket order service
-- Organizer management
-- Check-in service
-- Webhook processing for payment status notification
+### Prinsip Arsitektur
 
-## Project Timeline
+- PostgreSQL menjadi source of truth untuk transaksi dan inventory.
+- Redis menjadi infrastructure pendukung untuk cache/queue.
+- Critical inventory operation menggunakan database transaction dan row locking.
+- Xendit menjadi payment provider.
+- External refund request dilakukan setelah critical database transaction selesai.
 
-Project ini dikembangkan dalam kurun waktu sekitar 3 bulan, dimulai dari arsitektur awal hingga pengujian integrasi dan finalisasi fitur inti. Fokus pengembangannya mencakup:
+---
 
-- bulan 1: setup infrastructure, backend foundation, data model, auth
-- bulan 2: booking flow, event ticket flow, payment session, webhook integration
-- bulan 3: QR check-in, refund/recovery logic, stabilisasi, dan penyesuaian business flow
+## Fitur Utama
 
-Dengan target penyelesaian dan readiness menuju akhir tahun, project ini dirancang agar siap untuk tahap pengujian lanjut, rollout, dan iterasi produk.
+### Authentication
+
+- Register
+- Login
+- Current authenticated user
+- Logout
+- Laravel Sanctum token authentication
+- Role-based access
+
+### Booking
+
+- Resource availability checking
+- Booking hold
+- Reservation flow
+- Booking detail
+- Digital ticket retrieval
+- Payment session
+- Hold expiration
+- Concurrency protection
+
+### Event Ticketing
+
+- Event ticket order
+- Temporary ticket hold
+- Ticket quota management
+- Ticket confirmation
+- Individual ticket issuance
+- Unique ticket code
+- Signed QR payload
+- Order cancellation
+- Ticket order payment session
+
+### Payment
+
+- Payment session
+- Payment record
+- Xendit payment request
+- Payment status handling
+- Xendit webhook validation
+- Payment capture
+- Payment failure
+- Idempotent webhook processing
+
+### Refund & Recovery
+
+- Payment refund record
+- Xendit refund request
+- Refund status tracking
+- `refund.succeeded`
+- `refund.failed`
+- Late payment recovery
+- Inventory reacquisition
+- Automatic refund ketika inventory tidak tersedia
+
+### QR Check-in
+
+- QR ticket validation
+- Signed QR verification
+- Ticket state validation
+- Duplicate check-in prevention
+- Event/booking access verification
+
+---
+
+## Role & Business Context
+
+| Role | Tanggung Jawab Utama |
+|---|---|
+| Customer | Discovery, booking, pembelian tiket, pembayaran, dan akses tiket |
+| Merchant | Pengelolaan venue/resource dan operasional booking |
+| Organizer | Pengelolaan event, ticket type, quota, participant, dan check-in |
+| Admin | Approval, moderation, monitoring, konfigurasi, dan operasional platform |
+
+---
 
 ## Tech Stack
 
-### Backend
-- PHP 8.3
-- Laravel 13
-- Laravel Sanctum
-- Eloquent ORM
-- Artisan commands
+| Layer | Technology |
+|---|---|
+| Language | PHP 8.3 |
+| Framework | Laravel 13 |
+| Authentication | Laravel Sanctum |
+| Database | PostgreSQL 17 |
+| Cache / Infrastructure | Redis 7 |
+| Containerization | Docker Compose |
+| Payment | Xendit API |
+| API Style | REST API |
+| Version Control | Git / GitHub |
+| API Testing | Postman |
+| Mobile Client | React Native |
 
-### Data & Infra
-- PostgreSQL 17
-- Redis 7
-- Docker Compose
+---
 
-### Integrations
-- Xendit Payment API
-- QR code generation
-- webhook-based payment processing
+## Struktur Project
 
-## Local Development
+```text
+backend/
+├── app/
+│   ├── Console/
+│   ├── Http/
+│   │   └── Controllers/
+│   │       └── Api/
+│   ├── Models/
+│   ├── Services/
+│   └── Providers/
+├── bootstrap/
+├── config/
+├── database/
+│   ├── migrations/
+│   └── seeders/
+├── public/
+├── resources/
+├── routes/
+│   └── api.php
+├── storage/
+├── tests/
+├── artisan
+├── composer.json
+├── phpunit.xml
+└── .env.example
+```
 
-### 1. Clone repository
+---
+
+## Main Service Layer
+
+Business logic penting dipisahkan ke service layer agar controller tetap fokus pada HTTP request/response.
+
+```text
+app/Services/
+├── EventTicketPurchaseService
+├── EventTicketService
+├── PaymentSessionService
+├── PaymentService
+├── PaymentRefundService
+├── LatePaymentRecoveryService
+├── XenditService
+└── CheckInService
+```
+
+---
+
+## Alur Event Ticket
+
+```text
+Customer
+   │
+   ▼
+Create Ticket Hold
+   │
+   ├── Validate event
+   ├── Validate sales window
+   ├── Lock ticket type
+   ├── Check quota
+   └── reserved += quantity
+   │
+   ▼
+Payment Session
+   │
+   ▼
+Xendit Payment
+   │
+   ▼
+Xendit Webhook
+   │
+   ├── Payment Capture
+   │
+   ▼
+Confirm Order
+   │
+   ├── reserved -= quantity
+   ├── sold += quantity
+   └── Generate Individual Tickets
+   │
+   ▼
+Signed QR Ticket
+   │
+   ▼
+Check-in
+```
+
+---
+
+## Late Payment Recovery
+
+Ketika payment berhasil diterima setelah ticket order expired, backend mencoba memperoleh kembali inventory.
+
+```text
+PAYMENT CAPTURE
+      │
+      ▼
+Order = EXPIRED?
+   /          \
+ NO            YES
+ │              │
+ ▼              ▼
+Normal     Lock Ticket Type
+Flow             │
+                 ▼
+          Check Available Quota
+             /          \
+           YES           NO
+            │             │
+            ▼             ▼
+      Re-acquire       Request Refund
+       Inventory         to Xendit
+            │             │
+            ▼             ▼
+        CONFIRMED     REFUND PENDING
+            │             │
+            ▼             ▼
+      Generate Ticket  Refund Webhook
+```
+
+Database transaction digunakan untuk keputusan inventory. Komunikasi refund dengan Xendit dilakukan setelah transaksi database selesai.
+
+---
+
+## Security & Consistency
+
+- Authentication menggunakan Laravel Sanctum.
+- Authorization berdasarkan role/permission.
+- Input validation pada API.
+- PostgreSQL transaction untuk operasi kritis.
+- Row locking pada inventory/resource.
+- Signed QR payload untuk ticket verification.
+- Webhook token validation untuk callback Xendit.
+- Idempotency pada payment/webhook flow.
+- Pencegahan duplicate ticket/check-in.
+- External payment/refund request tidak dilakukan di tengah critical DB transaction.
+
+---
+
+## Local Setup
+
+### 1. Clone Repository
 
 ```bash
 git clone <repository-url>
-cd vybes
+cd vybes/backend
 ```
 
-### 2. Start infrastructure services
+### 2. Install Dependency
+
+```bash
+composer install
+```
+
+### 3. Environment
+
+```bash
+cp .env.example .env
+php artisan key:generate
+```
+
+Konfigurasi database local:
+
+```env
+DB_CONNECTION=pgsql
+DB_HOST=127.0.0.1
+DB_PORT=5433
+DB_DATABASE=vybes
+DB_USERNAME=vybes
+DB_PASSWORD=vybes_password
+```
+
+### 4. Jalankan Infrastructure
 
 ```bash
 docker compose up -d
+docker compose ps
 ```
 
-### 3. Setup backend
+### 5. Migration
 
 ```bash
-cd backend
-cp .env.example .env
-composer install
-php artisan key:generate
 php artisan migrate
+```
+
+Untuk seed:
+
+```bash
+php artisan db:seed
+```
+
+### 6. Jalankan Laravel
+
+```bash
 php artisan serve
 ```
 
-### 4. Optional frontend / client setup
+API default:
 
-```bash
-cd frontend
-npm install
-npm run dev
+```text
+http://127.0.0.1:8000
 ```
 
-> Sesuaikan dengan struktur project yang sedang Anda jalankan. Jika frontend berada di folder lain, sesuaikan command sesuai kebutuhan.
+---
 
-## Main API Modules
+## Environment Variables
 
-- Auth: register, login, user detail, logout
-- Availability: check resource availability
-- Booking: create and view booking
-- Payment: session creation and payment flow
-- Event ticket order: create, view, cancel order
-- Organizer: manage events and ticket types
-- Check-in: validate user entry using QR flow
-- Webhooks: Xendit callback processing
+```env
+APP_NAME=VYBES
+APP_ENV=local
+APP_KEY=
+APP_DEBUG=true
+APP_URL=http://127.0.0.1:8000
 
-## Current Status
+DB_CONNECTION=pgsql
+DB_HOST=127.0.0.1
+DB_PORT=5433
+DB_DATABASE=vybes
+DB_USERNAME=vybes
+DB_PASSWORD=vybes_password
 
-Project ini berada dalam fase pengembangan fitur inti dan integrasi bisnis. Fokus saat ini adalah memperkuat alur transaksi, keamanan payment, serta pengalaman operasional merchant dan organizer.
+REDIS_HOST=127.0.0.1
+REDIS_PORT=6379
 
-## Roadmap
+XENDIT_SECRET_KEY=
+XENDIT_API_URL=https://api.xendit.co
+XENDIT_WEBHOOK_TOKEN=
+```
 
-- improve transaction monitoring
-- strengthen refund/recovery audit trail
-- optimize organizer dashboard
-- expand mobile client support
-- enhance QA and staging readiness before production launch
+**Jangan commit secret key atau credential production ke repository.**
 
-## License
+---
 
-This project is currently under internal development and is not publicly released as a package or product license yet.
+## API Endpoint Utama
 
-## Notes
+```text
+POST   /api/auth/register
+POST   /api/auth/login
+POST   /api/auth/logout
+GET    /api/auth/me
 
-README ini dibuat untuk memberikan gambaran proyek yang lebih profesional, mudah dibaca, dan siap digunakan sebagai dokumentasi awal untuk internal team, stakeholder, maupun penerus development.
+GET    /api/bookings
+POST   /api/bookings
+GET    /api/bookings/{booking}
+GET    /api/bookings/{booking}/ticket
+
+POST   /api/bookings/{booking}/payment-session
+
+POST   /api/events/{event}/ticket-orders
+GET    /api/event-ticket-orders/{order}
+POST   /api/event-ticket-orders/{order}/cancel
+POST   /api/event-ticket-orders/{order}/payment-session
+
+POST   /api/check-in
+
+POST   /api/webhooks/xendit
+```
+
+---
+
+## Development Workflow
+
+```text
+Requirement
+    ↓
+PRD / Technical Specification
+    ↓
+Database / API Design
+    ↓
+Implementation
+    ↓
+Local Testing
+    ↓
+Integration Testing
+    ↓
+Code Review
+    ↓
+QA / UAT
+    ↓
+Staging
+    ↓
+Production
+```
+
+Perubahan requirement harus dicatat pada PRD dan/atau technical documentation agar Backend, Mobile, Admin/CMS, QA, dan Project Management tetap menggunakan baseline yang sama.
+
+---
+
+## Testing
+
+Area testing:
+
+- Unit Test
+- Feature Test
+- Integration Test
+- API Test
+- Black-box Test
+- Payment webhook test
+- Refund test
+- Concurrency test
+- QR validation test
+- Check-in test
+- UAT
+
+Area validasi utama:
+
+```text
+Booking
+├── availability
+├── hold
+├── payment
+├── confirmation
+└── expiration
+
+Event Ticket
+├── quota
+├── reserved
+├── sold
+├── ticket issuance
+└── check-in
+
+Payment
+├── capture
+├── failure
+├── webhook retry
+├── refund
+└── late payment recovery
+```
+
+---
+
+## Project Timeline
+
+| Tahap | Fokus |
+|---|---|
+| Foundation | Architecture, Laravel, PostgreSQL, Docker, authentication |
+| Booking | Availability, resource, hold, reservation |
+| Event Ticketing | Event, ticket type, quota, order, ticket issuance |
+| Payment | Payment session dan Xendit integration |
+| Security | Webhook validation, signed QR, authorization |
+| Recovery | Late payment recovery dan refund |
+| Stabilization | Inventory consistency, idempotency, testing |
+| Release Preparation | QA, UAT, deployment, production readiness |
+
+---
+
+## Current Development Focus
+
+Area yang masih menjadi bagian dari development dan hardening:
+
+- Admin operational features
+- Merchant operational features
+- Organizer participant/check-in flow
+- Review dan moderation
+- Notification
+- Cancellation policy
+- Audit log
+- Idempotency hardening
+- Refund end-to-end testing
+- Inventory reconciliation
+- Concurrency/load testing
+- Security testing
+- Mobile API integration
+- Production deployment
+
+Status fitur dapat berubah mengikuti hasil development dan keputusan Project Manager.
+
+---
+
+## Project Documentation
+
+```text
+docs/
+├── PRD/
+├── API/
+├── Architecture/
+├── Database/
+├── QA/
+└── Deployment/
+```
+
+PRD digunakan sebagai baseline requirement dan diperbarui melalui versioning apabila terjadi perubahan scope, business rule, atau requirement.
+
+---
+
+## Engineering Principles
+
+> **Requirement → Business Rule → Transaction → Validation → Test → Release**
+
+- Database adalah source of truth untuk transaksi dan inventory.
+- Business logic penting dipisahkan dari controller.
+- Critical inventory operation harus transactional.
+- External payment provider diperlakukan sebagai external dependency.
+- Webhook harus aman dan idempotent.
+- QR ticket harus dapat diverifikasi secara aman.
+- Requirement dan implementasi harus traceable.
+- Perubahan scope harus terdokumentasi.
+
+---
+
+## Repository Status
+
+```text
+Project       : VYBES
+Component     : Backend
+Framework     : Laravel 13
+Database      : PostgreSQL 17
+Cache         : Redis 7
+Payment       : Xendit
+Auth          : Laravel Sanctum
+Container     : Docker Compose
+API           : REST
+Status        : Active Development
+```
+
+---
+
+<p align="center">
+  <img src="https://readme-typing-svg.demolab.com?font=JetBrains+Mono&size=16&duration=3000&pause=1000&color=2F6B4F&center=true&vCenter=true&width=650&lines=VYBES+Backend;Booking+%7C+Events+%7C+Tickets+%7C+Payments+%7C+Check-in" alt="VYBES footer animation">
+</p>
+
+<p align="center">
+  <strong>Built for the VYBES ecosystem.</strong>
+</p>
