@@ -359,19 +359,13 @@ composer install
 ### 3. Environment
 
 ```bash
-cp .env.example .env
-php artisan key:generate
+atur sendiri
 ```
 
 Konfigurasi database local:
 
 ```env
-DB_CONNECTION=pgsql
-DB_HOST=127.0.0.1
-DB_PORT=5433
-DB_DATABASE=vybes
-DB_USERNAME=vybes
-DB_PASSWORD=vybes_password
+atur sendiri
 ```
 
 ### 4. Jalankan Infrastructure
@@ -405,35 +399,6 @@ API default:
 http://127.0.0.1:8000
 ```
 
----
-
-## Environment Variables
-
-```env
-APP_NAME=VYBES
-APP_ENV=local
-APP_KEY=
-APP_DEBUG=true
-APP_URL=http://127.0.0.1:8000
-
-DB_CONNECTION=pgsql
-DB_HOST=127.0.0.1
-DB_PORT=5433
-DB_DATABASE=vybes
-DB_USERNAME=vybes
-DB_PASSWORD=vybes_password
-
-REDIS_HOST=127.0.0.1
-REDIS_PORT=6379
-
-XENDIT_SECRET_KEY=
-XENDIT_API_URL=https://api.xendit.co
-XENDIT_WEBHOOK_TOKEN=
-```
-
-**Jangan commit secret key atau credential production ke repository.**
-
----
 
 ## API Endpoint Utama
 
