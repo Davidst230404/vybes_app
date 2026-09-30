@@ -87,7 +87,7 @@ Route::middleware('auth:sanctum')->group(function () {
         [BookingController::class, 'ticket']
     );
 
-    // Create payment session
+    // Create payment session for regular booking
     Route::post(
         '/bookings/{booking}/payment-session',
         [PaymentController::class, 'createSession']
@@ -125,6 +125,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post(
         '/event-ticket-orders/{order}/cancel',
         [EventTicketOrderController::class, 'cancel']
+    );
+
+    // Create payment session for event ticket order
+    Route::post(
+        '/event-ticket-orders/{order}/payment-session',
+        [PaymentController::class, 'createEventTicketSession']
     );
 });
 

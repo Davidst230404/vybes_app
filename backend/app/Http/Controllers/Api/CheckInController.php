@@ -18,11 +18,21 @@ class CheckInController extends Controller
         |--------------------------------------------------------------------------
         | Authorization
         |--------------------------------------------------------------------------
+        |
+        | Check-in dapat dilakukan oleh:
+        | - Merchant untuk booking venue
+        | - Organizer untuk event ticket
+        |
         */
 
-        if (!$request->user()->hasRole('merchant')) {
+        $user = $request->user();
+
+        if (
+            !$user->hasRole('merchant') &&
+            !$user->hasRole('organizer')
+        ) {
             return response()->json([
-                'message' => 'Only merchants can perform check-in.',
+                'message' => 'Only merchants or organizers can perform check-in.',
             ], 403);
         }
 
@@ -47,7 +57,7 @@ class CheckInController extends Controller
 
         $ticket = $checkInService->checkIn(
             $validated['qr_payload'],
-            $request->user()
+            $user
         );
 
         /*
