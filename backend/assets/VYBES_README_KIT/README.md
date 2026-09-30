@@ -1,9 +1,12 @@
 # VYBES Backend
 
 <p align="center">
-  <img src="https://readme-typing-svg.demolab.com?font=JetBrains+Mono&size=18&duration=2800&pause=900&color=D95F39&center=true&vCenter=true&width=760&lines=Booking+%7C+Event+Ticketing+%7C+Payment;Laravel+%2B+PostgreSQL+%2B+Redis+%2B+Docker;Secure+QR+Check-in+%7C+Xendit+Webhook+%7C+Refund;Built+as+the+transaction+engine+of+VYBES" alt="VYBES animation">
+  <img src="./assets/pacman-banner.gif" alt="VYBES Pac-Man animation" width="100%">
 </p>
 
+<p align="center">
+  <img src="https://readme-typing-svg.demolab.com?font=JetBrains+Mono&size=18&duration=2800&pause=900&color=D95F39&center=true&vCenter=true&width=760&lines=Booking+%7C+Event+Ticketing+%7C+Payment;Laravel+%2B+PostgreSQL+%2B+Redis+%2B+Docker;Secure+QR+Check-in+%7C+Xendit+Webhook+%7C+Refund;Built+as+the+transaction+engine+of+VYBES" alt="VYBES animation">
+</p>
 <p align="center">
   <strong>Core API & Transaction Engine untuk Platform Booking dan Event Ticketing</strong>
 </p>
@@ -566,6 +569,10 @@ Status        : Active Development
 ```
 
 ---
+
+<p align="center">
+  <img src="./assets/arcade-banner.gif" alt="VYBES arcade animation" width="100%">
+</p>
 
 <p align="center">
   <img src="https://readme-typing-svg.demolab.com?font=JetBrains+Mono&size=16&duration=3000&pause=1000&color=2F6B4F&center=true&vCenter=true&width=650&lines=VYBES+Backend;Booking+%7C+Events+%7C+Tickets+%7C+Payments+%7C+Check-in" alt="VYBES footer animation">
