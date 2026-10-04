@@ -7,6 +7,7 @@ use App\Models\Booking;
 use App\Models\BookingTicket;
 use App\Models\EventTicketOrder;
 use App\Models\Payment;
+use App\Models\PaymentRefund;
 use App\Models\PaymentSession;
 use App\Services\EventTicketPurchaseService;
 use App\Services\EventTicketService;
@@ -38,12 +39,32 @@ class XenditWebhookController extends Controller
         $data = $request->input('data', []);
 
         switch ($event) {
+            /*
+             * --------------------------------------------------------------
+             * PAYMENT
+             * --------------------------------------------------------------
+             */
+
             case 'payment.capture':
                 $this->handlePaymentCapture($data);
                 break;
 
             case 'payment.failure':
                 $this->handlePaymentFailure($data);
+                break;
+
+            /*
+             * --------------------------------------------------------------
+             * REFUND
+             * --------------------------------------------------------------
+             */
+
+            case 'refund.succeeded':
+                $this->handleRefundSucceeded($data);
+                break;
+
+            case 'refund.failed':
+                $this->handleRefundFailed($data);
                 break;
         }
 
@@ -58,6 +79,7 @@ class XenditWebhookController extends Controller
      * IMPORTANT:
      *
      * Payment state is committed first.
+     *
      * Business state is processed only AFTER the payment transaction
      * has successfully committed.
      *
@@ -89,22 +111,21 @@ class XenditWebhookController extends Controller
             }
 
             /*
-            |--------------------------------------------------------------------------
-            | Idempotency
-            |--------------------------------------------------------------------------
-            |
-            | IMPORTANT:
-            |
-            | We do NOT return from the entire webhook when payment is already
-            | paid.
-            |
-            | A previous webhook may have successfully committed the payment
-            | but failed during the business-state processing afterwards.
-            |
-            | Therefore the payment can already be "paid" while the related
-            | order still needs recovery.
-            |
-            */
+             * --------------------------------------------------------------------------
+             * Idempotency
+             * --------------------------------------------------------------------------
+             *
+             * IMPORTANT:
+             *
+             * We do NOT return from the entire webhook when payment is already
+             * paid.
+             *
+             * A previous webhook may have successfully committed the payment
+             * but failed during the business-state processing afterwards.
+             *
+             * Therefore the payment can already be "paid" while the related
+             * order still needs recovery.
+             */
 
             $existingPayload = $payment->provider_payload ?? [];
 
@@ -116,10 +137,10 @@ class XenditWebhookController extends Controller
             );
 
             /*
-            |--------------------------------------------------------------------------
-            | Mark payment as paid
-            |--------------------------------------------------------------------------
-            */
+             * --------------------------------------------------------------------------
+             * Mark payment as paid
+             * --------------------------------------------------------------------------
+             */
 
             if ($payment->status !== 'paid') {
                 $payment->update([
@@ -130,12 +151,13 @@ class XenditWebhookController extends Controller
                 ]);
             } else {
                 /*
-                |------------------------------------------------------------------
-                | Payment was already marked as paid.
-                | Keep the latest webhook payload without changing the
-                | payment state again.
-                |------------------------------------------------------------------
-                */
+                 * ------------------------------------------------------------------
+                 * Payment was already marked as paid.
+                 *
+                 * Keep the latest webhook payload without changing the
+                 * payment state again.
+                 * ------------------------------------------------------------------
+                 */
 
                 $payment->update([
                     'provider_transaction_id' =>
@@ -147,10 +169,10 @@ class XenditWebhookController extends Controller
             }
 
             /*
-            |--------------------------------------------------------------------------
-            | Update payment session
-            |--------------------------------------------------------------------------
-            */
+             * --------------------------------------------------------------------------
+             * Update payment session
+             * --------------------------------------------------------------------------
+             */
 
             if ($payment->payment_session_id !== null) {
                 $paymentSession = PaymentSession::query()
@@ -170,25 +192,25 @@ class XenditWebhookController extends Controller
         });
 
         /*
-        |--------------------------------------------------------------------------
-        | No matching payment
-        |--------------------------------------------------------------------------
-        */
+         * --------------------------------------------------------------------------
+         * No matching payment
+         * --------------------------------------------------------------------------
+         */
 
         if ($paymentId === null) {
             return;
         }
 
         /*
-        |--------------------------------------------------------------------------
-        | IMPORTANT:
-        |
-        | The transaction above has now COMMITTED.
-        |
-        | Only after this point do we process booking/event-ticket business
-        | state.
-        |--------------------------------------------------------------------------
-        */
+         * --------------------------------------------------------------------------
+         * IMPORTANT:
+         *
+         * The transaction above has now COMMITTED.
+         *
+         * Only after this point do we process booking/event-ticket business
+         * state.
+         * --------------------------------------------------------------------------
+         */
 
         $payment = Payment::query()
             ->find($paymentId);
@@ -198,20 +220,20 @@ class XenditWebhookController extends Controller
         }
 
         /*
-        |--------------------------------------------------------------------------
-        | Booking payment
-        |--------------------------------------------------------------------------
-        */
+         * --------------------------------------------------------------------------
+         * Booking payment
+         * --------------------------------------------------------------------------
+         */
 
         if ($payment->booking_id !== null) {
             $this->confirmBooking($payment);
         }
 
         /*
-        |--------------------------------------------------------------------------
-        | Event ticket payment
-        |--------------------------------------------------------------------------
-        */
+         * --------------------------------------------------------------------------
+         * Event ticket payment
+         * --------------------------------------------------------------------------
+         */
 
         if ($payment->event_ticket_order_id !== null) {
             $this->confirmEventTicketOrder($payment);
@@ -224,13 +246,13 @@ class XenditWebhookController extends Controller
     private function confirmBooking(Payment $payment): void
     {
         /*
-        |--------------------------------------------------------------------------
-        | Business transaction
-        |--------------------------------------------------------------------------
-        |
-        | This transaction is completely separate from the payment transaction.
-        |
-        */
+         * --------------------------------------------------------------------------
+         * Business transaction
+         * --------------------------------------------------------------------------
+         *
+         * This transaction is completely separate from the payment transaction.
+         *
+         */
 
         DB::transaction(function () use ($payment) {
             $booking = Booking::query()
@@ -243,30 +265,30 @@ class XenditWebhookController extends Controller
             }
 
             /*
-            |--------------------------------------------------------------------------
-            | Already processed
-            |--------------------------------------------------------------------------
-            */
+             * --------------------------------------------------------------------------
+             * Already processed
+             * --------------------------------------------------------------------------
+             */
 
             if ($booking->status === 'confirmed') {
                 return;
             }
 
             /*
-            |--------------------------------------------------------------------------
-            | Only process active hold
-            |--------------------------------------------------------------------------
-            */
+             * --------------------------------------------------------------------------
+             * Only process active hold
+             * --------------------------------------------------------------------------
+             */
 
             if ($booking->status !== 'held') {
                 return;
             }
 
             /*
-            |--------------------------------------------------------------------------
-            | Expired booking
-            |--------------------------------------------------------------------------
-            */
+             * --------------------------------------------------------------------------
+             * Expired booking
+             * --------------------------------------------------------------------------
+             */
 
             if (
                 $booking->hold_expires_at !== null &&
@@ -286,10 +308,10 @@ class XenditWebhookController extends Controller
             }
 
             /*
-            |--------------------------------------------------------------------------
-            | Confirm booking
-            |--------------------------------------------------------------------------
-            */
+             * --------------------------------------------------------------------------
+             * Confirm booking
+             * --------------------------------------------------------------------------
+             */
 
             $booking->update([
                 'status' => 'confirmed',
@@ -297,10 +319,10 @@ class XenditWebhookController extends Controller
             ]);
 
             /*
-            |--------------------------------------------------------------------------
-            | Create digital ticket
-            |--------------------------------------------------------------------------
-            */
+             * --------------------------------------------------------------------------
+             * Create digital ticket
+             * --------------------------------------------------------------------------
+             */
 
             BookingTicket::firstOrCreate(
                 [
@@ -338,15 +360,16 @@ class XenditWebhookController extends Controller
         }
 
         /*
-        |--------------------------------------------------------------------------
-        | Already confirmed
-        |--------------------------------------------------------------------------
-        |
-        | Idempotent:
-        | Do not increase sold again.
-        | Do not create duplicate tickets.
-        |
-        */
+         * --------------------------------------------------------------------------
+         * Already confirmed
+         * --------------------------------------------------------------------------
+         *
+         * Idempotent:
+         *
+         * Do not increase sold again.
+         * Do not create duplicate tickets.
+         *
+         */
 
         if ($order->status === 'confirmed') {
             app(EventTicketService::class)
@@ -356,13 +379,13 @@ class XenditWebhookController extends Controller
         }
 
         /*
-        |--------------------------------------------------------------------------
-        | NORMAL PAYMENT
-        |--------------------------------------------------------------------------
-        |
-        | Payment arrived while the ticket order is still held.
-        |
-        */
+         * --------------------------------------------------------------------------
+         * NORMAL PAYMENT
+         * --------------------------------------------------------------------------
+         *
+         * Payment arrived while the ticket order is still held.
+         *
+         */
 
         if ($order->status === 'held') {
             $purchaseService = app(
@@ -374,10 +397,10 @@ class XenditWebhookController extends Controller
             );
 
             /*
-            |--------------------------------------------------------------------------
-            | Generate individual event tickets
-            |--------------------------------------------------------------------------
-            */
+             * ------------------------------------------------------------------
+             * Generate individual event tickets
+             * ------------------------------------------------------------------
+             */
 
             if ($order->status === 'confirmed') {
                 app(EventTicketService::class)
@@ -388,26 +411,26 @@ class XenditWebhookController extends Controller
         }
 
         /*
-        |--------------------------------------------------------------------------
-        | LATE PAYMENT
-        |--------------------------------------------------------------------------
-        |
-        | Payment arrived after the original ticket hold expired.
-        |
-        | IMPORTANT:
-        |
-        | LatePaymentRecoveryService owns this flow.
-        |
-        | It will:
-        |
-        | 1. Lock order + ticket type.
-        | 2. Reconcile current inventory.
-        | 3. Reacquire inventory if possible.
-        | 4. Confirm order + generate tickets.
-        | 5. Otherwise commit DB state first.
-        | 6. Then request Xendit refund.
-        |
-        */
+         * --------------------------------------------------------------------------
+         * LATE PAYMENT
+         * --------------------------------------------------------------------------
+         *
+         * Payment arrived after the original ticket hold expired.
+         *
+         * IMPORTANT:
+         *
+         * LatePaymentRecoveryService owns this flow.
+         *
+         * It will:
+         *
+         * 1. Lock order + ticket type.
+         * 2. Reconcile current inventory.
+         * 3. Reacquire inventory if possible.
+         * 4. Confirm order + generate tickets.
+         * 5. Otherwise commit DB state first.
+         * 6. Then request Xendit refund.
+         *
+         */
 
         if ($order->status === 'expired') {
             app(LatePaymentRecoveryService::class)
@@ -417,15 +440,15 @@ class XenditWebhookController extends Controller
         }
 
         /*
-        |--------------------------------------------------------------------------
-        | Other terminal states
-        |--------------------------------------------------------------------------
-        |
-        | cancelled / refunded / etc.
-        |
-        | Nothing to do here.
-        |
-        */
+         * --------------------------------------------------------------------------
+         * Other terminal states
+         * --------------------------------------------------------------------------
+         *
+         * cancelled / refunded / etc.
+         *
+         * Nothing to do here.
+         *
+         */
 
         return;
     }
@@ -456,20 +479,20 @@ class XenditWebhookController extends Controller
             }
 
             /*
-            |--------------------------------------------------------------------------
-            | Never overwrite successful payment
-            |--------------------------------------------------------------------------
-            */
+             * --------------------------------------------------------------------------
+             * Never overwrite successful payment
+             * --------------------------------------------------------------------------
+             */
 
             if ($payment->status === 'paid') {
                 return;
             }
 
             /*
-            |--------------------------------------------------------------------------
-            | Preserve provider payload
-            |--------------------------------------------------------------------------
-            */
+             * --------------------------------------------------------------------------
+             * Preserve provider payload
+             * --------------------------------------------------------------------------
+             */
 
             $existingPayload = $payment->provider_payload ?? [];
 
@@ -481,10 +504,10 @@ class XenditWebhookController extends Controller
             );
 
             /*
-            |--------------------------------------------------------------------------
-            | Mark payment failed
-            |--------------------------------------------------------------------------
-            */
+             * --------------------------------------------------------------------------
+             * Mark payment failed
+             * --------------------------------------------------------------------------
+             */
 
             $payment->update([
                 'status' => 'failed',
@@ -496,10 +519,10 @@ class XenditWebhookController extends Controller
             ]);
 
             /*
-            |--------------------------------------------------------------------------
-            | Update payment session
-            |--------------------------------------------------------------------------
-            */
+             * --------------------------------------------------------------------------
+             * Update payment session
+             * --------------------------------------------------------------------------
+             */
 
             if ($payment->payment_session_id !== null) {
                 $paymentSession = PaymentSession::query()
@@ -514,6 +537,205 @@ class XenditWebhookController extends Controller
                 }
             }
         });
+    }
+
+    /**
+     * Handle successful Xendit refund webhook.
+     *
+     * This handler is idempotent.
+     */
+    private function handleRefundSucceeded(array $data): void
+    {
+        DB::transaction(function () use ($data) {
+            $paymentRefund = $this->findPaymentRefundForWebhook($data);
+
+            if (!$paymentRefund) {
+                return;
+            }
+
+            /*
+             * Never downgrade an already successful refund.
+             *
+             * This protects against duplicate/out-of-order webhooks.
+             */
+            if ($paymentRefund->status === 'succeeded') {
+                $existingPayload =
+                    $paymentRefund->provider_payload ?? [];
+
+                $paymentRefund->update([
+                    'provider_payload' => array_merge(
+                        $existingPayload,
+                        [
+                            'webhook' => $data,
+                        ]
+                    ),
+                ]);
+
+                return;
+            }
+
+            $existingPayload =
+                $paymentRefund->provider_payload ?? [];
+
+            $updatedPayload = array_merge(
+                $existingPayload,
+                [
+                    'webhook' => $data,
+                ]
+            );
+
+            $paymentRefund->update([
+                'provider_refund_id' =>
+                    $paymentRefund->provider_refund_id
+                    ?? ($data['id'] ?? $data['refund_id'] ?? null),
+
+                'status' => 'succeeded',
+
+                'provider_payload' => $updatedPayload,
+
+                'succeeded_at' =>
+                    $paymentRefund->succeeded_at ?? now(),
+
+                'failed_at' => null,
+
+                'failure_code' => null,
+
+                'failure_reason' => null,
+            ]);
+        });
+    }
+
+    /**
+     * Handle failed Xendit refund webhook.
+     *
+     * This handler is idempotent.
+     */
+    private function handleRefundFailed(array $data): void
+    {
+        DB::transaction(function () use ($data) {
+            $paymentRefund = $this->findPaymentRefundForWebhook($data);
+
+            if (!$paymentRefund) {
+                return;
+            }
+
+            /*
+             * Never downgrade a successfully completed refund.
+             *
+             * This protects against out-of-order webhook delivery.
+             */
+            if ($paymentRefund->status === 'succeeded') {
+                $existingPayload =
+                    $paymentRefund->provider_payload ?? [];
+
+                $paymentRefund->update([
+                    'provider_payload' => array_merge(
+                        $existingPayload,
+                        [
+                            'webhook' => $data,
+                        ]
+                    ),
+                ]);
+
+                return;
+            }
+
+            $existingPayload =
+                $paymentRefund->provider_payload ?? [];
+
+            $updatedPayload = array_merge(
+                $existingPayload,
+                [
+                    'webhook' => $data,
+                ]
+            );
+
+            $paymentRefund->update([
+                'provider_refund_id' =>
+                    $paymentRefund->provider_refund_id
+                    ?? ($data['id'] ?? $data['refund_id'] ?? null),
+
+                'status' => 'failed',
+
+                'provider_payload' => $updatedPayload,
+
+                'failure_code' =>
+                    $data['failure_code']
+                    ?? $data['code']
+                    ?? null,
+
+                'failure_reason' =>
+                    $data['failure_reason']
+                    ?? $data['message']
+                    ?? 'Refund failed.',
+
+                'failed_at' =>
+                    $paymentRefund->failed_at ?? now(),
+
+                'succeeded_at' => null,
+            ]);
+        });
+    }
+
+    /**
+     * Find the local PaymentRefund related to an Xendit refund webhook.
+     *
+     * Matching priority:
+     *
+     * 1. provider_refund_id
+     * 2. reference_id
+     */
+    private function findPaymentRefundForWebhook(
+        array $data
+    ): ?PaymentRefund {
+        $providerRefundId =
+            $data['id']
+            ?? $data['refund_id']
+            ?? null;
+
+        $referenceId =
+            $data['reference_id']
+            ?? null;
+
+        /*
+         * --------------------------------------------------------------------------
+         * Match by Xendit refund ID
+         * --------------------------------------------------------------------------
+         */
+
+        if ($providerRefundId) {
+            $refund = PaymentRefund::query()
+                ->where('provider', 'xendit')
+                ->where(
+                    'provider_refund_id',
+                    $providerRefundId
+                )
+                ->lockForUpdate()
+                ->first();
+
+            if ($refund) {
+                return $refund;
+            }
+        }
+
+        /*
+         * --------------------------------------------------------------------------
+         * Match by our reference ID
+         * --------------------------------------------------------------------------
+         */
+
+        if ($referenceId) {
+            return PaymentRefund::query()
+                ->where('provider', 'xendit')
+                ->where(
+                    'reference_id',
+                    $referenceId
+                )
+                ->lockForUpdate()
+                ->first();
+        }
+
+        return null;
     }
 
     /**
