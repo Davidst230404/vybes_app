@@ -132,8 +132,8 @@ class CheckInService
              * Validate Merchant Ownership.
              */
             if (
-                $ticket->booking->venue->merchant_id !==
-                $merchant->id
+                !$ticket->booking->venue ||
+                $ticket->booking->venue->merchant_id !== $merchant->id
             ) {
                 throw ValidationException::withMessages([
                     'venue' => [
@@ -288,7 +288,7 @@ class CheckInService
              */
             if (
                 $ticket->event_ticket_order_id !==
-                $payload['order_id']
+                (int) $payload['order_id']
             ) {
                 throw ValidationException::withMessages([
                     'qr_payload' => [
@@ -299,7 +299,7 @@ class CheckInService
 
             if (
                 $ticket->event_id !==
-                $payload['event_id']
+                (int) $payload['event_id']
             ) {
                 throw ValidationException::withMessages([
                     'qr_payload' => [
@@ -417,10 +417,24 @@ class CheckInService
 
     /**
      * Decode dan verify signed event QR.
+     *
+     * Format:
+     *
+     * v1.{base64url(payload)}.{signature}
+     *
+     * Signature:
+     * HMAC-SHA256(encodedPayload, APP_KEY)
      */
     private function decodeAndVerifyEventQr(
         string $qrPayload
     ): array {
+        /*
+         * Pisahkan:
+         *
+         * [0] version
+         * [1] encoded payload
+         * [2] signature
+         */
         $parts = explode('.', $qrPayload);
 
         if (count($parts) !== 3) {
@@ -433,6 +447,9 @@ class CheckInService
 
         [$version, $encodedPayload, $signature] = $parts;
 
+        /*
+         * Hanya support v1.
+         */
         if ($version !== 'v1') {
             throw ValidationException::withMessages([
                 'qr_payload' => [
@@ -441,6 +458,9 @@ class CheckInService
             ]);
         }
 
+        /*
+         * Payload dan signature wajib ada.
+         */
         if ($encodedPayload === '' || $signature === '') {
             throw ValidationException::withMessages([
                 'qr_payload' => [
@@ -450,7 +470,11 @@ class CheckInService
         }
 
         /*
-         * Recalculate signature dari payload.
+         * Recalculate signature dari encoded payload.
+         *
+         * Penting:
+         * Signature dihitung dari string Base64 URL-safe
+         * yang tersimpan di QR, bukan dari JSON hasil decode.
          */
         $expectedSignature = hash_hmac(
             'sha256',
@@ -470,14 +494,43 @@ class CheckInService
         }
 
         /*
-         * Decode Base64 URL-safe.
+         * Convert Base64 URL-safe:
+         *
+         * - menjadi +
+         * _ menjadi /
+         */
+        $base64 = strtr(
+            $encodedPayload,
+            '-_',
+            '+/'
+        );
+
+        /*
+         * Tambahkan padding Base64 SEBELUM decode.
+         *
+         * Ini penting.
+         *
+         * Jangan melakukan:
+         *
+         * base64_decode() -> lalu padding
+         *
+         * karena setelah decode variable tersebut
+         * sudah menjadi JSON string.
+         */
+        $padding = strlen($base64) % 4;
+
+        if ($padding !== 0) {
+            $base64 .= str_repeat(
+                '=',
+                4 - $padding
+            );
+        }
+
+        /*
+         * Decode Base64.
          */
         $json = base64_decode(
-            strtr(
-                $encodedPayload,
-                '-_',
-                '+/'
-            ),
+            $base64,
             true
         );
 
@@ -490,18 +543,12 @@ class CheckInService
         }
 
         /*
-         * Tambahkan padding Base64 jika diperlukan.
-         */
-        $padding = strlen($json) % 4;
-
-        if ($padding !== 0) {
-            $json .= str_repeat('=', 4 - $padding);
-        }
-
-        /*
          * Decode JSON.
          */
-        $payload = json_decode($json, true);
+        $payload = json_decode(
+            $json,
+            true
+        );
 
         if (!is_array($payload)) {
             throw ValidationException::withMessages([
@@ -517,11 +564,17 @@ class CheckInService
         if (
             ($payload['type'] ?? null) !==
                 'VYBES_EVENT_TICKET' ||
+
             ($payload['version'] ?? null) !== 1 ||
+
             empty($payload['ticket_code']) ||
+
             empty($payload['order_id']) ||
+
             empty($payload['order_code']) ||
+
             empty($payload['event_id']) ||
+
             empty($payload['nonce'])
         ) {
             throw ValidationException::withMessages([
