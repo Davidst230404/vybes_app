@@ -20,11 +20,24 @@ use Illuminate\Support\Facades\Route;
 
 Route::prefix('auth')->group(function () {
 
+    /*
+    |--------------------------------------------------------------------------
+    | Public Authentication
+    |--------------------------------------------------------------------------
+    */
+
     // Register
-    Route::post('/register', [AuthController::class, 'register']);
+    Route::post(
+        '/register',
+        [AuthController::class, 'register']
+    );
 
     // Login
-    Route::post('/login', [AuthController::class, 'login']);
+    Route::post(
+        '/login',
+        [AuthController::class, 'login']
+    );
+
 
     /*
     |--------------------------------------------------------------------------
@@ -35,10 +48,16 @@ Route::prefix('auth')->group(function () {
     Route::middleware('auth:sanctum')->group(function () {
 
         // Get authenticated user
-        Route::get('/me', [AuthController::class, 'me']);
+        Route::get(
+            '/me',
+            [AuthController::class, 'me']
+        );
 
         // Logout
-        Route::post('/logout', [AuthController::class, 'logout']);
+        Route::post(
+            '/logout',
+            [AuthController::class, 'logout']
+        );
     });
 });
 
@@ -47,9 +66,11 @@ Route::prefix('auth')->group(function () {
 |--------------------------------------------------------------------------
 | Availability
 |--------------------------------------------------------------------------
+|
+| Public endpoint untuk mengecek availability resource.
+|
 */
 
-// Check resource availability
 Route::get(
     '/resources/{resource}/availability',
     [AvailabilityController::class, 'check']
@@ -58,11 +79,26 @@ Route::get(
 
 /*
 |--------------------------------------------------------------------------
-| Booking & Check-in
+| Regular Booking
 |--------------------------------------------------------------------------
+|
+| Booking untuk venue/resource biasa:
+| - Create booking hold
+| - List booking user
+| - Booking detail
+| - Digital ticket
+| - Payment session
+| - Check-in
+|
 */
 
 Route::middleware('auth:sanctum')->group(function () {
+
+    /*
+    |--------------------------------------------------------------------------
+    | Booking
+    |--------------------------------------------------------------------------
+    */
 
     // Get user's bookings
     Route::get(
@@ -88,13 +124,20 @@ Route::middleware('auth:sanctum')->group(function () {
         [BookingController::class, 'ticket']
     );
 
-    // Create payment session for regular booking
+    // Create payment session
     Route::post(
         '/bookings/{booking}/payment-session',
         [PaymentController::class, 'createSession']
     );
 
-    // Check-in ticket
+
+    /*
+    |--------------------------------------------------------------------------
+    | Regular Booking Check-in
+    |--------------------------------------------------------------------------
+    */
+
+    // Check-in regular booking ticket
     Route::post(
         '/check-in',
         [CheckInController::class, 'checkIn']
@@ -106,9 +149,18 @@ Route::middleware('auth:sanctum')->group(function () {
 |--------------------------------------------------------------------------
 | Event Ticket Orders
 |--------------------------------------------------------------------------
+|
+| Customer membeli tiket event.
+|
 */
 
 Route::middleware('auth:sanctum')->group(function () {
+
+    /*
+    |--------------------------------------------------------------------------
+    | Event Ticket Order
+    |--------------------------------------------------------------------------
+    */
 
     // Create temporary ticket order / hold
     Route::post(
@@ -116,7 +168,7 @@ Route::middleware('auth:sanctum')->group(function () {
         [EventTicketOrderController::class, 'store']
     );
 
-    // Get customer's ticket order
+    // Get ticket order detail
     Route::get(
         '/event-ticket-orders/{order}',
         [EventTicketOrderController::class, 'show']
@@ -128,7 +180,7 @@ Route::middleware('auth:sanctum')->group(function () {
         [EventTicketOrderController::class, 'cancel']
     );
 
-    // Create payment session for event ticket order
+    // Create payment session for event ticket
     Route::post(
         '/event-ticket-orders/{order}/payment-session',
         [PaymentController::class, 'createEventTicketSession']
@@ -140,9 +192,22 @@ Route::middleware('auth:sanctum')->group(function () {
 |--------------------------------------------------------------------------
 | Organizer Events
 |--------------------------------------------------------------------------
+|
+| Organizer:
+| - List event
+| - Create event
+| - Detail event
+| - Update event
+|
 */
 
 Route::middleware('auth:sanctum')->group(function () {
+
+    /*
+    |--------------------------------------------------------------------------
+    | Event Management
+    |--------------------------------------------------------------------------
+    */
 
     // Get organizer events
     Route::get(
@@ -161,6 +226,12 @@ Route::middleware('auth:sanctum')->group(function () {
         '/organizer/events/{event}',
         [OrganizerEventController::class, 'show']
     );
+
+    // Update event
+    Route::put(
+        '/organizer/events/{event}',
+        [OrganizerEventController::class, 'update']
+    );
 });
 
 
@@ -168,9 +239,22 @@ Route::middleware('auth:sanctum')->group(function () {
 |--------------------------------------------------------------------------
 | Organizer Ticket Types
 |--------------------------------------------------------------------------
+|
+| Organizer dapat:
+| - Melihat ticket type
+| - Membuat ticket type
+| - Update ticket type
+| - Delete ticket type
+|
 */
 
 Route::middleware('auth:sanctum')->group(function () {
+
+    /*
+    |--------------------------------------------------------------------------
+    | Ticket Type Management
+    |--------------------------------------------------------------------------
+    */
 
     // Get ticket types
     Route::get(
@@ -202,9 +286,21 @@ Route::middleware('auth:sanctum')->group(function () {
 |--------------------------------------------------------------------------
 | Organizer Participants
 |--------------------------------------------------------------------------
+|
+| Organizer dapat:
+| - Melihat semua participant
+| - Melihat detail participant
+| - Check-in participant
+|
 */
 
 Route::middleware('auth:sanctum')->group(function () {
+
+    /*
+    |--------------------------------------------------------------------------
+    | Participant Management
+    |--------------------------------------------------------------------------
+    */
 
     // Get participants for organizer event
     Route::get(
@@ -230,9 +326,12 @@ Route::middleware('auth:sanctum')->group(function () {
 |--------------------------------------------------------------------------
 | Xendit Webhook
 |--------------------------------------------------------------------------
+|
+| Endpoint ini TIDAK menggunakan auth:sanctum karena
+| request berasal dari Xendit.
+|
 */
 
-// Receive payment notifications from Xendit
 Route::post(
     '/webhooks/xendit',
     [XenditWebhookController::class, 'handle']
