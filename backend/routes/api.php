@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\BookingController;
 use App\Http\Controllers\Api\CheckInController;
 use App\Http\Controllers\Api\EventTicketOrderController;
 use App\Http\Controllers\Api\OrganizerEventController;
+use App\Http\Controllers\Api\OrganizerParticipantController;
 use App\Http\Controllers\Api\OrganizerTicketTypeController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\XenditWebhookController;
@@ -193,6 +194,34 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete(
         '/organizer/events/{event}/ticket-types/{ticketType}',
         [OrganizerTicketTypeController::class, 'destroy']
+    );
+});
+
+
+/*
+|--------------------------------------------------------------------------
+| Organizer Participants
+|--------------------------------------------------------------------------
+*/
+
+Route::middleware('auth:sanctum')->group(function () {
+
+    // Get participants for organizer event
+    Route::get(
+        '/organizer/events/{event}/participants',
+        [OrganizerParticipantController::class, 'index']
+    );
+
+    // Get participant detail
+    Route::get(
+        '/organizer/events/{event}/participants/{ticket}',
+        [OrganizerParticipantController::class, 'show']
+    );
+
+    // Check-in participant
+    Route::post(
+        '/organizer/events/{event}/participants/{ticket}/check-in',
+        [OrganizerParticipantController::class, 'checkIn']
     );
 });
 

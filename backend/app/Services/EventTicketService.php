@@ -16,10 +16,16 @@ class EventTicketService
      * - ticket_code unik
      * - QR payload unik
      * - signature HMAC untuk mencegah manipulasi payload
+     *
+     * Idempotent:
+     * - Tidak membuat duplicate ticket.
+     * - Ticket lama tetap digunakan.
+     * - Legacy QR akan di-upgrade menjadi signed QR v1.
      */
     public function generateTickets(EventTicketOrder $order): array
     {
         return DB::transaction(function () use ($order) {
+
             $order = EventTicketOrder::query()
                 ->with(['event'])
                 ->whereKey($order->id)
@@ -35,23 +41,84 @@ class EventTicketService
             }
 
             /*
-             * Idempotency:
-             * Jangan membuat tiket baru kalau tiket untuk order
-             * tersebut sudah pernah dibuat.
+             * Ambil semua ticket yang sudah pernah dibuat
+             * untuk order ini.
              */
             $existingTickets = EventTicket::query()
                 ->where('event_ticket_order_id', $order->id)
+                ->orderBy('id')
+                ->lockForUpdate()
                 ->get();
 
+            /*
+             * =========================================================
+             * UPGRADE LEGACY QR
+             * =========================================================
+             *
+             * Ticket lama mungkin masih memiliki QR seperti:
+             *
+             * {
+             *     "type": "VYBES_EVENT_TICKET",
+             *     "order_id": 7,
+             *     "order_code": "...",
+             *     "event_id": 2
+             * }
+             *
+             * QR tersebut tidak memiliki signature.
+             *
+             * Kalau QR belum menggunakan format:
+             *
+             * v1.{base64url}.{signature}
+             *
+             * maka generate ulang berdasarkan ticket yang sama.
+             *
+             * Ticket code TIDAK berubah.
+             * ID ticket TIDAK berubah.
+             */
+            foreach ($existingTickets as $ticket) {
+
+                if (!$this->isSignedQr($ticket->qr_payload)) {
+                    $ticket->update([
+                        'qr_payload' => $this->generateQrPayload(
+                            order: $order,
+                            ticketCode: $ticket->ticket_code
+                        ),
+                    ]);
+
+                    /*
+                     * Refresh object supaya qr_payload terbaru
+                     * tersedia pada return value.
+                     */
+                    $ticket->refresh();
+                }
+            }
+
+            /*
+             * =========================================================
+             * IDEMPOTENCY
+             * =========================================================
+             *
+             * Kalau jumlah ticket sudah mencukupi quantity order,
+             * jangan membuat ticket baru.
+             *
+             * Ticket lama yang legacy sudah di-upgrade di atas.
+             */
             if ($existingTickets->count() >= $order->quantity) {
                 return $existingTickets->all();
             }
 
-            $tickets = [];
+            /*
+             * =========================================================
+             * CREATE MISSING TICKETS
+             * =========================================================
+             */
+
+            $tickets = $existingTickets->all();
 
             $remaining = $order->quantity - $existingTickets->count();
 
             for ($i = 0; $i < $remaining; $i++) {
+
                 /*
                  * Ticket code dibuat terlebih dahulu karena akan
                  * menjadi identifier unik di dalam QR.
@@ -90,7 +157,9 @@ class EventTicketService
                 substr(bin2hex(random_bytes(5)), 0, 10)
             );
         } while (
-            EventTicket::where('ticket_code', $code)->exists()
+            EventTicket::query()
+                ->where('ticket_code', $code)
+                ->exists()
         );
 
         return $code;
@@ -137,6 +206,28 @@ class EventTicketService
         );
 
         return "v1.{$encodedPayload}.{$signature}";
+    }
+
+    /**
+     * Check apakah QR sudah menggunakan format signed v1.
+     */
+    private function isSignedQr(?string $qrPayload): bool
+    {
+        if (!$qrPayload) {
+            return false;
+        }
+
+        /*
+         * Format minimum:
+         *
+         * v1.payload.signature
+         */
+        $parts = explode('.', $qrPayload);
+
+        return count($parts) === 3
+            && $parts[0] === 'v1'
+            && $parts[1] !== ''
+            && $parts[2] !== '';
     }
 
     /**

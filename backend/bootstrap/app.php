@@ -12,11 +12,59 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
+
+    /*
+    |--------------------------------------------------------------------------
+    | Middleware
+    |--------------------------------------------------------------------------
+    */
+
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+
+        /*
+        |--------------------------------------------------------------------------
+        | API Authentication
+        |--------------------------------------------------------------------------
+        |
+        | API yang tidak memiliki authentication token tidak boleh
+        | diarahkan ke route /login.
+        |
+        | API harus mengembalikan HTTP 401 Unauthorized.
+        |
+        */
+
+        $middleware->redirectGuestsTo(function (Request $request) {
+
+            if ($request->is('api/*')) {
+                return null;
+            }
+
+            return route('login');
+        });
     })
+
+    /*
+    |--------------------------------------------------------------------------
+    | Exceptions
+    |--------------------------------------------------------------------------
+    */
+
     ->withExceptions(function (Exceptions $exceptions): void {
+
+        /*
+        |--------------------------------------------------------------------------
+        | API JSON Response
+        |--------------------------------------------------------------------------
+        |
+        | Semua request /api/* harus menggunakan JSON response.
+        |
+        */
+
         $exceptions->shouldRenderJsonWhen(
-            fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
+            fn (Request $request) =>
+                $request->is('api/*') ||
+                $request->expectsJson(),
         );
-    })->create();
+    })
+
+    ->create();
