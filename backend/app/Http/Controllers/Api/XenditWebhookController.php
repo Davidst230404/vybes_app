@@ -92,8 +92,20 @@ class XenditWebhookController extends Controller
         $paymentId = DB::transaction(function () use ($data) {
             $paymentRequestId = $data['payment_request_id'] ?? null;
             $xenditPaymentId = $data['payment_id'] ?? null;
+            $xenditStatus = $data['status'] ?? null;
 
-            if (!$paymentRequestId) {
+            /*
+             * Xendit payment.capture must represent a successful
+             * payment before the local payment is marked as paid.
+             *
+             * A payment request can exist while still being
+             * REQUIRES_ACTION / pending.
+             */
+            if (
+                !$paymentRequestId ||
+                !$xenditPaymentId ||
+                $xenditStatus !== 'SUCCEEDED'
+            ) {
                 return null;
             }
 
@@ -251,7 +263,6 @@ class XenditWebhookController extends Controller
          * --------------------------------------------------------------------------
          *
          * This transaction is completely separate from the payment transaction.
-         *
          */
 
         DB::transaction(function () use ($payment) {
@@ -368,7 +379,6 @@ class XenditWebhookController extends Controller
          *
          * Do not increase sold again.
          * Do not create duplicate tickets.
-         *
          */
 
         if ($order->status === 'confirmed') {
@@ -384,7 +394,6 @@ class XenditWebhookController extends Controller
          * --------------------------------------------------------------------------
          *
          * Payment arrived while the ticket order is still held.
-         *
          */
 
         if ($order->status === 'held') {
@@ -429,7 +438,6 @@ class XenditWebhookController extends Controller
          * 4. Confirm order + generate tickets.
          * 5. Otherwise commit DB state first.
          * 6. Then request Xendit refund.
-         *
          */
 
         if ($order->status === 'expired') {
@@ -447,7 +455,6 @@ class XenditWebhookController extends Controller
          * cancelled / refunded / etc.
          *
          * Nothing to do here.
-         *
          */
 
         return;
@@ -558,6 +565,7 @@ class XenditWebhookController extends Controller
              *
              * This protects against duplicate/out-of-order webhooks.
              */
+
             if ($paymentRefund->status === 'succeeded') {
                 $existingPayload =
                     $paymentRefund->provider_payload ?? [];
@@ -624,6 +632,7 @@ class XenditWebhookController extends Controller
              *
              * This protects against out-of-order webhook delivery.
              */
+
             if ($paymentRefund->status === 'succeeded') {
                 $existingPayload =
                     $paymentRefund->provider_payload ?? [];

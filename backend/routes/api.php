@@ -198,6 +198,8 @@ Route::middleware('auth:sanctum')->group(function () {
 | - Create event
 | - Detail event
 | - Update event
+| - Cancel event
+| - Reschedule event
 |
 */
 
@@ -231,6 +233,18 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put(
         '/organizer/events/{event}',
         [OrganizerEventController::class, 'update']
+    );
+
+    // Cancel event
+    Route::post(
+        '/organizer/events/{event}/cancel',
+        [OrganizerEventController::class, 'cancel']
+    );
+
+    // Reschedule event
+    Route::put(
+        '/organizer/events/{event}/reschedule',
+        [OrganizerEventController::class, 'reschedule']
     );
 });
 
@@ -289,6 +303,7 @@ Route::middleware('auth:sanctum')->group(function () {
 |
 | Organizer dapat:
 | - Melihat semua participant
+| - Export participant CSV
 | - Melihat detail participant
 | - Check-in participant
 |
@@ -296,16 +311,16 @@ Route::middleware('auth:sanctum')->group(function () {
 
 Route::middleware('auth:sanctum')->group(function () {
 
-    /*
-    |--------------------------------------------------------------------------
-    | Participant Management
-    |--------------------------------------------------------------------------
-    */
-
     // Get participants for organizer event
     Route::get(
         '/organizer/events/{event}/participants',
         [OrganizerParticipantController::class, 'index']
+    );
+
+    // Export participants CSV
+    Route::get(
+        '/organizer/events/{event}/participants/export',
+        [OrganizerParticipantController::class, 'export']
     );
 
     // Get participant detail
@@ -320,7 +335,6 @@ Route::middleware('auth:sanctum')->group(function () {
         [OrganizerParticipantController::class, 'checkIn']
     );
 });
-
 
 /*
 |--------------------------------------------------------------------------

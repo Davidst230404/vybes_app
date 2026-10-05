@@ -4,15 +4,21 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Event;
+use App\Models\EventTicket;
+use App\Models\EventTicketOrder;
+use App\Models\EventTicketType;
+use App\Models\Payment;
+use App\Services\PaymentRefundService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class OrganizerEventController extends Controller
 {
     /**
-     * Get organizer events.
+     * List events owned by authenticated organizer.
      */
     public function index(Request $request): JsonResponse
     {
@@ -38,9 +44,8 @@ class OrganizerEventController extends Controller
         ]);
     }
 
-
     /**
-     * Create event.
+     * Create new event.
      */
     public function store(Request $request): JsonResponse
     {
@@ -55,6 +60,7 @@ class OrganizerEventController extends Controller
         $validated = $request->validate([
             'venue_id' => [
                 'nullable',
+                'integer',
                 'exists:venues,id',
             ],
 
@@ -103,7 +109,6 @@ class OrganizerEventController extends Controller
             ),
 
             'description' => $validated['description'] ?? null,
-
             'cover_image' => $validated['cover_image'] ?? null,
 
             'starts_at' => $validated['starts_at'],
@@ -122,24 +127,20 @@ class OrganizerEventController extends Controller
         ], 201);
     }
 
-
     /**
-     * Get event detail.
+     * Show organizer event detail.
      */
     public function show(
         Request $request,
         Event $event
     ): JsonResponse {
-        $organizer = $request->user()->organizer;
+        $authorizationError = $this->authorizeOrganizerEvent(
+            $request,
+            $event
+        );
 
-        if (
-            !$organizer ||
-            $event->organizer_id !== $organizer->id
-        ) {
-            return response()->json([
-                'message' =>
-                    'You are not authorized to access this event.',
-            ], 403);
+        if ($authorizationError) {
+            return $authorizationError;
         }
 
         return response()->json([
@@ -150,75 +151,33 @@ class OrganizerEventController extends Controller
         ]);
     }
 
-
     /**
      * Update organizer event.
-     *
-     * ORG-02
      */
     public function update(
         Request $request,
         Event $event
     ): JsonResponse {
-        $organizer = $request->user()->organizer;
+        $authorizationError = $this->authorizeOrganizerEvent(
+            $request,
+            $event
+        );
 
-        /*
-        |--------------------------------------------------------------------------
-        | Organizer validation
-        |--------------------------------------------------------------------------
-        */
-
-        if (!$organizer) {
-            return response()->json([
-                'message' => 'Organizer profile not found.',
-            ], 403);
+        if ($authorizationError) {
+            return $authorizationError;
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | Ownership validation
-        |--------------------------------------------------------------------------
-        */
-
-        if ($event->organizer_id !== $organizer->id) {
+        if ($event->status === 'cancelled') {
             return response()->json([
-                'message' =>
-                    'You are not authorized to update this event.',
-            ], 403);
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | Prevent editing cancelled/completed event
-        |--------------------------------------------------------------------------
-        */
-
-        if (
-            in_array(
-                $event->status,
-                [
-                    'cancelled',
-                    'completed',
-                ],
-                true
-            )
-        ) {
-            return response()->json([
-                'message' =>
-                    'Cancelled or completed events cannot be edited.',
+                'message' => 'Cancelled events cannot be updated.',
             ], 422);
         }
-
-        /*
-        |--------------------------------------------------------------------------
-        | Validation
-        |--------------------------------------------------------------------------
-        */
 
         $validated = $request->validate([
             'venue_id' => [
                 'sometimes',
                 'nullable',
+                'integer',
                 'exists:venues,id',
             ],
 
@@ -253,14 +212,17 @@ class OrganizerEventController extends Controller
                 'required',
                 'date',
             ],
+
+            'status' => [
+                'sometimes',
+                'in:draft,published,cancelled,completed',
+            ],
         ]);
 
         /*
-        |--------------------------------------------------------------------------
-        | Validate date range
-        |--------------------------------------------------------------------------
-        */
-
+         * Jika hanya salah satu starts_at / ends_at dikirim,
+         * gunakan nilai lama untuk validasi kombinasi tanggal.
+         */
         $startsAt = $validated['starts_at']
             ?? $event->starts_at;
 
@@ -268,112 +230,31 @@ class OrganizerEventController extends Controller
             ?? $event->ends_at;
 
         if (
-            strtotime((string) $endsAt) <=
-            strtotime((string) $startsAt)
+            $startsAt !== null &&
+            $endsAt !== null &&
+            strtotime((string) $endsAt) <= strtotime((string) $startsAt)
         ) {
-            return response()->json([
-                'message' =>
-                    'The event end time must be after the start time.',
-
-                'errors' => [
-                    'ends_at' => [
-                        'The end time must be after the start time.',
-                    ],
+            throw ValidationException::withMessages([
+                'ends_at' => [
+                    'The ends_at must be after starts_at.',
                 ],
-            ], 422);
+            ]);
         }
 
         /*
-        |--------------------------------------------------------------------------
-        | Prevent changing event into invalid past schedule
-        |--------------------------------------------------------------------------
-        */
-
+         * Generate slug hanya jika title berubah.
+         */
         if (
-            array_key_exists('starts_at', $validated) &&
-            strtotime((string) $validated['starts_at']) <=
-            now()->timestamp
+            array_key_exists('title', $validated) &&
+            $validated['title'] !== $event->title
         ) {
-            return response()->json([
-                'message' =>
-                    'Event start time must be in the future.',
-
-                'errors' => [
-                    'starts_at' => [
-                        'The event start time must be in the future.',
-                    ],
-                ],
-            ], 422);
+            $validated['slug'] = $this->generateUniqueSlug(
+                $validated['title'],
+                $event->id
+            );
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | Update event
-        |--------------------------------------------------------------------------
-        */
-
-        DB::transaction(function () use (
-            $event,
-            $validated
-        ) {
-            /*
-            |--------------------------------------------------------------------------
-            | Update slug only when title changes
-            |--------------------------------------------------------------------------
-            */
-
-            if (
-                array_key_exists('title', $validated) &&
-                $validated['title'] !== $event->title
-            ) {
-                $event->slug = $this->generateUniqueSlug(
-                    $validated['title'],
-                    $event->id
-                );
-            }
-
-            /*
-            |--------------------------------------------------------------------------
-            | Update allowed fields
-            |--------------------------------------------------------------------------
-            */
-
-            if (array_key_exists('venue_id', $validated)) {
-                $event->venue_id = $validated['venue_id'];
-            }
-
-            if (array_key_exists('title', $validated)) {
-                $event->title = $validated['title'];
-            }
-
-            if (array_key_exists('description', $validated)) {
-                $event->description =
-                    $validated['description'];
-            }
-
-            if (array_key_exists('cover_image', $validated)) {
-                $event->cover_image =
-                    $validated['cover_image'];
-            }
-
-            if (array_key_exists('starts_at', $validated)) {
-                $event->starts_at =
-                    $validated['starts_at'];
-            }
-
-            if (array_key_exists('ends_at', $validated)) {
-                $event->ends_at =
-                    $validated['ends_at'];
-            }
-
-            $event->save();
-        });
-
-        /*
-        |--------------------------------------------------------------------------
-        | Response
-        |--------------------------------------------------------------------------
-        */
+        $event->update($validated);
 
         return response()->json([
             'message' => 'Event updated successfully.',
@@ -387,24 +268,415 @@ class OrganizerEventController extends Controller
         ]);
     }
 
+    /**
+     * Cancel an event.
+     *
+     * Flow:
+     *
+     * 1. Validate organizer ownership.
+     * 2. Lock event.
+     * 3. Mark event cancelled.
+     * 4. Disable ticket types.
+     * 5. Cancel confirmed / active ticket orders.
+     * 6. Cancel issued tickets.
+     * 7. Collect paid payment IDs.
+     * 8. Commit DB transaction.
+     * 9. Process Xendit refunds OUTSIDE transaction.
+     */
+    public function cancel(
+        Request $request,
+        Event $event,
+        PaymentRefundService $refundService
+    ): JsonResponse {
+        $authorizationError = $this->authorizeOrganizerEvent(
+            $request,
+            $event
+        );
+
+        if ($authorizationError) {
+            return $authorizationError;
+        }
+
+        $validated = $request->validate([
+            'reason' => [
+                'nullable',
+                'string',
+                'max:500',
+            ],
+        ]);
+
+        $refundPaymentIds = [];
+
+        /*
+         * ==========================================================
+         * DATABASE TRANSACTION
+         * ==========================================================
+         *
+         * Jangan panggil Xendit di dalam transaction.
+         */
+        DB::transaction(function () use (
+            $event,
+            $validated,
+            &$refundPaymentIds
+        ) {
+            /*
+             * Lock event.
+             */
+            $lockedEvent = Event::query()
+                ->whereKey($event->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            /*
+             * Idempotency.
+             */
+            if ($lockedEvent->status === 'cancelled') {
+                throw ValidationException::withMessages([
+                    'event' => [
+                        'This event has already been cancelled.',
+                    ],
+                ]);
+            }
+
+            /*
+             * Event completed tidak boleh dibatalkan.
+             */
+            if ($lockedEvent->status === 'completed') {
+                throw ValidationException::withMessages([
+                    'event' => [
+                        'Completed events cannot be cancelled.',
+                    ],
+                ]);
+            }
+
+            /*
+             * Cancel event.
+             */
+            $lockedEvent->update([
+                'status' => 'cancelled',
+            ]);
+
+            /*
+             * Disable semua ticket type.
+             */
+            EventTicketType::query()
+                ->where('event_id', $lockedEvent->id)
+                ->update([
+                    'status' => 'inactive',
+                ]);
+
+            /*
+             * Ambil semua ticket order.
+             */
+            $orders = EventTicketOrder::query()
+                ->where('event_id', $lockedEvent->id)
+                ->lockForUpdate()
+                ->get();
+
+            foreach ($orders as $order) {
+                /*
+                 * ==================================================
+                 * CONFIRMED
+                 * ==================================================
+                 *
+                 * Order confirmed:
+                 * - cancel order
+                 * - cari payment paid
+                 * - simpan payment ID untuk refund
+                 */
+                if ($order->status === 'confirmed') {
+                    $order->update([
+                        'status' => 'cancelled',
+                        'cancelled_at' => now(),
+                    ]);
+
+                    $payment = Payment::query()
+                        ->where('event_ticket_order_id', $order->id)
+                        ->where('status', 'paid')
+                        ->lockForUpdate()
+                        ->first();
+
+                    if ($payment) {
+                        $refundPaymentIds[] = $payment->id;
+                    }
+
+                    continue;
+                }
+
+                /*
+                 * ==================================================
+                 * HELD / WAITING PAYMENT / PENDING
+                 * ==================================================
+                 */
+                if (
+                    in_array(
+                        $order->status,
+                        [
+                            'held',
+                            'waiting_payment',
+                            'pending',
+                        ],
+                        true
+                    )
+                ) {
+                    $order->update([
+                        'status' => 'cancelled',
+                        'cancelled_at' => now(),
+                    ]);
+                }
+            }
+
+            /*
+             * ======================================================
+             * CANCEL ISSUED TICKETS
+             * ======================================================
+             *
+             * Ticket tidak dihapus supaya historical record tetap
+             * tersedia.
+             */
+            EventTicket::query()
+                ->where('event_id', $lockedEvent->id)
+                ->where('status', 'active')
+                ->update([
+                    'status' => 'cancelled',
+                ]);
+        });
+
+        /*
+         * ==========================================================
+         * REFUND XENDIT
+         * ==========================================================
+         *
+         * Dilakukan SETELAH DB transaction selesai.
+         */
+        $refunds = [];
+        $refundFailures = [];
+
+        foreach (array_unique($refundPaymentIds) as $paymentId) {
+            try {
+                $payment = Payment::query()
+                    ->find($paymentId);
+
+                if (!$payment) {
+                    continue;
+                }
+
+                /*
+                 * Gunakan positional arguments.
+                 *
+                 * Ini menghindari masalah IDE/static analyzer
+                 * terhadap named arguments.
+                 */
+                $refund = $refundService->createRefund(
+                    payment: $payment,
+                     amount: (float) $payment->amount,
+                     reason: 'CANCELLATION'
+            );
+
+                $refunds[] = [
+                    'payment_id' => $payment->id,
+                    'refund_id' => $refund->id,
+                    'status' => $refund->status,
+                    'amount' => $refund->amount,
+                ];
+            } catch (\Throwable $exception) {
+                /*
+                 * Event tetap cancelled walaupun refund provider
+                 * gagal.
+                 */
+                $refundFailures[] = [
+                    'payment_id' => $paymentId,
+                    'message' => $exception->getMessage(),
+                ];
+            }
+        }
+
+        /*
+         * Refresh event setelah seluruh proses selesai.
+         */
+        $event->refresh();
+
+        return response()->json([
+            'message' => 'Event cancelled successfully.',
+
+            'data' => [
+                'event' => $event->load([
+                    'venue',
+                    'ticketTypes',
+                ]),
+
+                'refunds' => $refunds,
+
+                'refund_failures' => $refundFailures,
+            ],
+        ]);
+    }
+
+    /**
+     * Reschedule organizer event.
+     *
+     * Existing ticket/order tetap dipertahankan.
+     * Yang berubah hanya jadwal event.
+     */
+    public function reschedule(
+        Request $request,
+        Event $event
+    ): JsonResponse {
+        $authorizationError = $this->authorizeOrganizerEvent(
+            $request,
+            $event
+        );
+
+        if ($authorizationError) {
+            return $authorizationError;
+        }
+
+        if ($event->status === 'cancelled') {
+            return response()->json([
+                'message' => 'Cancelled events cannot be rescheduled.',
+            ], 422);
+        }
+
+        if ($event->status === 'completed') {
+            return response()->json([
+                'message' => 'Completed events cannot be rescheduled.',
+            ], 422);
+        }
+
+        $validated = $request->validate([
+            'starts_at' => [
+                'required',
+                'date',
+                'after:now',
+            ],
+
+            'ends_at' => [
+                'required',
+                'date',
+                'after:starts_at',
+            ],
+
+            'reason' => [
+                'nullable',
+                'string',
+                'max:500',
+            ],
+        ]);
+
+        /*
+         * Update schedule secara atomic.
+         */
+        DB::transaction(function () use (
+            $event,
+            $validated
+        ) {
+            $lockedEvent = Event::query()
+                ->whereKey($event->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($lockedEvent->status === 'cancelled') {
+                throw ValidationException::withMessages([
+                    'event' => [
+                        'Cancelled events cannot be rescheduled.',
+                    ],
+                ]);
+            }
+
+            if ($lockedEvent->status === 'completed') {
+                throw ValidationException::withMessages([
+                    'event' => [
+                        'Completed events cannot be rescheduled.',
+                    ],
+                ]);
+            }
+
+            $lockedEvent->update([
+                'starts_at' => $validated['starts_at'],
+                'ends_at' => $validated['ends_at'],
+            ]);
+        });
+
+        /*
+         * Reason belum disimpan karena events table belum memiliki
+         * kolom dedicated untuk reschedule reason.
+         */
+        return response()->json([
+            'message' => 'Event rescheduled successfully.',
+
+            'data' => [
+                'event' => $event
+                    ->fresh()
+                    ->load([
+                        'venue',
+                        'ticketTypes',
+                    ]),
+            ],
+        ]);
+    }
+
+    /**
+     * Authorize organizer ownership.
+     */
+    private function authorizeOrganizerEvent(
+        Request $request,
+        Event $event
+    ): ?JsonResponse {
+        $user = $request->user();
+
+        if (!$user) {
+            return response()->json([
+                'message' => 'Unauthenticated.',
+            ], 401);
+        }
+
+        /*
+         * User harus memiliki role organizer.
+         */
+        if (!$user->hasRole('organizer')) {
+            return response()->json([
+                'message' => 'Only organizers can manage events.',
+            ], 403);
+        }
+
+        /*
+         * Organizer profile harus tersedia.
+         */
+        $organizer = $user->organizer;
+
+        if (!$organizer) {
+            return response()->json([
+                'message' => 'Organizer profile not found.',
+            ], 403);
+        }
+
+        /*
+         * IMPORTANT:
+         *
+         * events.organizer_id -> organizers.id
+         *
+         * BUKAN users.id.
+         */
+        if ((int) $event->organizer_id !== (int) $organizer->id) {
+            return response()->json([
+                'message' => 'You are not authorized to access this event.',
+            ], 403);
+        }
+
+        return null;
+    }
 
     /**
      * Generate unique event slug.
      *
-     * $ignoreEventId digunakan ketika UPDATE
-     * agar event tidak bentrok dengan slug miliknya sendiri.
+     * $ignoreEventId digunakan saat UPDATE supaya slug milik
+     * event yang sedang di-update tidak dianggap duplicate.
      */
     private function generateUniqueSlug(
         string $title,
         ?int $ignoreEventId = null
     ): string {
         $baseSlug = Str::slug($title);
-
-        /*
-        |--------------------------------------------------------------------------
-        | Fallback apabila title menghasilkan slug kosong
-        |--------------------------------------------------------------------------
-        */
 
         if ($baseSlug === '') {
             $baseSlug = 'event';
@@ -413,16 +685,24 @@ class OrganizerEventController extends Controller
         $slug = $baseSlug;
         $counter = 1;
 
-        while (
-            Event::query()
-                ->where('slug', $slug)
-                ->when(
-                    $ignoreEventId !== null,
-                    fn ($query) =>
-                        $query->whereKey('!=', $ignoreEventId)
-                )
-                ->exists()
-        ) {
+        while (true) {
+            $query = Event::query()
+                ->where('slug', $slug);
+
+            /*
+             * Jangan menggunakan whereKeyNot().
+             *
+             * Gunakan where('id', '!=', ...) agar kompatibel
+             * dengan versi Laravel/Eloquent yang digunakan.
+             */
+            if ($ignoreEventId !== null) {
+                $query->where('id', '!=', $ignoreEventId);
+            }
+
+            if (!$query->exists()) {
+                break;
+            }
+
             $slug = "{$baseSlug}-{$counter}";
             $counter++;
         }

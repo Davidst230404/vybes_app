@@ -20,11 +20,12 @@ class CheckInService
         User $user
     ): BookingTicket|EventTicket {
         /*
-         * Event QR menggunakan format:
+         * Event QR:
          *
          * v1.{base64url(payload)}.{signature}
          *
-         * Booking QR lama masih menggunakan JSON.
+         * Booking QR lama:
+         * JSON payload.
          */
         if ($this->isSignedEventQr($qrPayload)) {
             return $this->checkInEventTicket(
@@ -50,7 +51,8 @@ class CheckInService
     /**
      * Check-in booking ticket.
      *
-     * Flow existing booking dipertahankan.
+     * Hanya Merchant yang memiliki venue tersebut
+     * yang dapat melakukan check-in.
      */
     private function checkInBookingTicket(
         string $qrPayload,
@@ -61,9 +63,12 @@ class CheckInService
             $user
         ) {
             /*
-             * Booking QR masih menggunakan JSON.
+             * Decode booking QR.
              */
-            $payload = json_decode($qrPayload, true);
+            $payload = json_decode(
+                $qrPayload,
+                true
+            );
 
             if (!is_array($payload)) {
                 throw ValidationException::withMessages([
@@ -73,6 +78,9 @@ class CheckInService
                 ]);
             }
 
+            /*
+             * Validate payload.
+             */
             if (
                 ($payload['type'] ?? null) !== 'VYBES_TICKET' ||
                 empty($payload['booking_id']) ||
@@ -86,8 +94,8 @@ class CheckInService
             }
 
             /*
-             * Pastikan hanya merchant yang dapat melakukan
-             * booking check-in.
+             * Booking ticket hanya boleh
+             * di-check-in oleh Merchant.
              */
             if (!$user->hasRole('merchant')) {
                 throw ValidationException::withMessages([
@@ -97,13 +105,20 @@ class CheckInService
                 ]);
             }
 
+            /*
+             * Lock ticket untuk mencegah
+             * concurrent double check-in.
+             */
             $ticket = BookingTicket::query()
                 ->with([
                     'booking.venue',
                     'booking.items.resource',
                     'booking.payment',
                 ])
-                ->where('booking_id', $payload['booking_id'])
+                ->where(
+                    'booking_id',
+                    $payload['booking_id']
+                )
                 ->lockForUpdate()
                 ->first();
 
@@ -116,7 +131,7 @@ class CheckInService
             }
 
             /*
-             * Validate Merchant.
+             * Validate Merchant profile.
              */
             $merchant = $user->merchant;
 
@@ -129,11 +144,12 @@ class CheckInService
             }
 
             /*
-             * Validate Merchant Ownership.
+             * Validate Merchant ownership.
              */
             if (
                 !$ticket->booking->venue ||
-                $ticket->booking->venue->merchant_id !== $merchant->id
+                $ticket->booking->venue->merchant_id !==
+                $merchant->id
             ) {
                 throw ValidationException::withMessages([
                     'venue' => [
@@ -143,7 +159,7 @@ class CheckInService
             }
 
             /*
-             * Validate QR Payload.
+             * Validate booking code.
              */
             if (
                 $ticket->booking->booking_code !==
@@ -157,7 +173,7 @@ class CheckInService
             }
 
             /*
-             * Validate Ticket.
+             * Validate ticket status.
              */
             if ($ticket->status !== 'active') {
                 throw ValidationException::withMessages([
@@ -168,7 +184,7 @@ class CheckInService
             }
 
             /*
-             * Validate Booking.
+             * Validate booking status.
              */
             if ($ticket->booking->status !== 'confirmed') {
                 throw ValidationException::withMessages([
@@ -179,7 +195,7 @@ class CheckInService
             }
 
             /*
-             * Validate Payment.
+             * Validate payment.
              */
             $payment = $ticket->booking->payment;
 
@@ -192,9 +208,12 @@ class CheckInService
             }
 
             /*
-             * Validate Booking Date.
+             * Validate booking date.
              */
-            $bookingDate = $ticket->booking->starts_at->toDateString();
+            $bookingDate = $ticket->booking
+                ->starts_at
+                ->toDateString();
+
             $today = now()->toDateString();
 
             if ($bookingDate !== $today) {
@@ -206,7 +225,7 @@ class CheckInService
             }
 
             /*
-             * Validate Check-in Status.
+             * Prevent duplicate check-in.
              */
             if ($ticket->checked_in_at !== null) {
                 throw ValidationException::withMessages([
@@ -217,7 +236,7 @@ class CheckInService
             }
 
             /*
-             * Record Check-in.
+             * Record check-in.
              */
             $ticket->update([
                 'checked_in_at' => now(),
@@ -234,8 +253,8 @@ class CheckInService
     /**
      * Check-in event ticket.
      *
-     * Hanya Organizer dari event tersebut yang boleh melakukan
-     * check-in.
+     * Hanya Organizer dari event tersebut
+     * yang boleh melakukan check-in.
      */
     private function checkInEventTicket(
         string $qrPayload,
@@ -246,14 +265,14 @@ class CheckInService
             $user
         ) {
             /*
-             * Validate dan decode signed QR.
+             * Decode dan verify signed QR.
              */
             $payload = $this->decodeAndVerifyEventQr(
                 $qrPayload
             );
 
             /*
-             * Pastikan user adalah organizer.
+             * Hanya Organizer.
              */
             if (!$user->hasRole('organizer')) {
                 throw ValidationException::withMessages([
@@ -264,14 +283,18 @@ class CheckInService
             }
 
             /*
-             * ticket_code adalah identifier unik per ticket.
+             * Cari ticket berdasarkan ticket_code
+             * dan lock row.
              */
             $ticket = EventTicket::query()
                 ->with([
                     'order.payment',
                     'event',
                 ])
-                ->where('ticket_code', $payload['ticket_code'])
+                ->where(
+                    'ticket_code',
+                    $payload['ticket_code']
+                )
                 ->lockForUpdate()
                 ->first();
 
@@ -284,10 +307,10 @@ class CheckInService
             }
 
             /*
-             * Pastikan QR benar-benar milik ticket tersebut.
+             * QR -> Ticket validation.
              */
             if (
-                $ticket->event_ticket_order_id !==
+                (int) $ticket->event_ticket_order_id !==
                 (int) $payload['order_id']
             ) {
                 throw ValidationException::withMessages([
@@ -297,8 +320,11 @@ class CheckInService
                 ]);
             }
 
+            /*
+             * QR -> Event validation.
+             */
             if (
-                $ticket->event_id !==
+                (int) $ticket->event_id !==
                 (int) $payload['event_id']
             ) {
                 throw ValidationException::withMessages([
@@ -309,12 +335,31 @@ class CheckInService
             }
 
             /*
-             * Validate Organizer Ownership.
+             * Validate event.
              */
+            if (!$ticket->event) {
+                throw ValidationException::withMessages([
+                    'event' => [
+                        'Event not found.',
+                    ],
+                ]);
+            }
+
+            /*
+             * Validate Organizer ownership.
+             *
+             * events.organizer_id ->
+             * organizers.id
+             *
+             * users.id ->
+             * organizers.user_id
+             */
+            $organizer = $user->organizer;
+
             if (
-                !$ticket->event ||
-                $ticket->event->organizer_id !==
-                $user->organizer?->id
+                !$organizer ||
+                (int) $ticket->event->organizer_id !==
+                (int) $organizer->id
             ) {
                 throw ValidationException::withMessages([
                     'event' => [
@@ -324,7 +369,7 @@ class CheckInService
             }
 
             /*
-             * Validate Ticket Status.
+             * Validate ticket status.
              */
             if ($ticket->status !== 'active') {
                 throw ValidationException::withMessages([
@@ -335,7 +380,7 @@ class CheckInService
             }
 
             /*
-             * Validate Order.
+             * Validate order.
              */
             if (!$ticket->order) {
                 throw ValidationException::withMessages([
@@ -345,6 +390,23 @@ class CheckInService
                 ]);
             }
 
+            /*
+             * Validate order code dari QR.
+             */
+            if (
+                $ticket->order->order_code !==
+                $payload['order_code']
+            ) {
+                throw ValidationException::withMessages([
+                    'qr_payload' => [
+                        'QR code does not match the ticket order.',
+                    ],
+                ]);
+            }
+
+            /*
+             * Validate order status.
+             */
             if ($ticket->order->status !== 'confirmed') {
                 throw ValidationException::withMessages([
                     'order' => [
@@ -354,7 +416,7 @@ class CheckInService
             }
 
             /*
-             * Validate Payment.
+             * Validate payment.
              */
             $payment = $ticket->order->payment;
 
@@ -367,9 +429,7 @@ class CheckInService
             }
 
             /*
-             * Validate Event Date.
-             *
-             * Check-in hanya boleh dilakukan pada tanggal event.
+             * Validate event start date.
              */
             if (!$ticket->event->starts_at) {
                 throw ValidationException::withMessages([
@@ -379,7 +439,10 @@ class CheckInService
                 ]);
             }
 
-            $eventDate = $ticket->event->starts_at->toDateString();
+            $eventDate = $ticket->event
+                ->starts_at
+                ->toDateString();
+
             $today = now()->toDateString();
 
             if ($eventDate !== $today) {
@@ -392,6 +455,10 @@ class CheckInService
 
             /*
              * Prevent duplicate check-in.
+             *
+             * lockForUpdate() di atas memastikan
+             * dua request concurrent tidak dapat
+             * sama-sama melewati check ini.
              */
             if ($ticket->checked_in_at !== null) {
                 throw ValidationException::withMessages([
@@ -421,21 +488,14 @@ class CheckInService
      * Format:
      *
      * v1.{base64url(payload)}.{signature}
-     *
-     * Signature:
-     * HMAC-SHA256(encodedPayload, APP_KEY)
      */
     private function decodeAndVerifyEventQr(
         string $qrPayload
     ): array {
-        /*
-         * Pisahkan:
-         *
-         * [0] version
-         * [1] encoded payload
-         * [2] signature
-         */
-        $parts = explode('.', $qrPayload);
+        $parts = explode(
+            '.',
+            $qrPayload
+        );
 
         if (count($parts) !== 3) {
             throw ValidationException::withMessages([
@@ -445,10 +505,14 @@ class CheckInService
             ]);
         }
 
-        [$version, $encodedPayload, $signature] = $parts;
+        [
+            $version,
+            $encodedPayload,
+            $signature
+        ] = $parts;
 
         /*
-         * Hanya support v1.
+         * Validate version.
          */
         if ($version !== 'v1') {
             throw ValidationException::withMessages([
@@ -459,9 +523,12 @@ class CheckInService
         }
 
         /*
-         * Payload dan signature wajib ada.
+         * Payload + signature wajib.
          */
-        if ($encodedPayload === '' || $signature === '') {
+        if (
+            $encodedPayload === '' ||
+            $signature === ''
+        ) {
             throw ValidationException::withMessages([
                 'qr_payload' => [
                     'Invalid signed event ticket QR code.',
@@ -470,11 +537,8 @@ class CheckInService
         }
 
         /*
-         * Recalculate signature dari encoded payload.
-         *
-         * Penting:
-         * Signature dihitung dari string Base64 URL-safe
-         * yang tersimpan di QR, bukan dari JSON hasil decode.
+         * Signature dihitung dari EXACT
+         * Base64URL string yang ada di QR.
          */
         $expectedSignature = hash_hmac(
             'sha256',
@@ -485,7 +549,10 @@ class CheckInService
         /*
          * Timing-safe comparison.
          */
-        if (!hash_equals($expectedSignature, $signature)) {
+        if (!hash_equals(
+            $expectedSignature,
+            $signature
+        )) {
             throw ValidationException::withMessages([
                 'qr_payload' => [
                     'Invalid QR signature.',
@@ -494,10 +561,7 @@ class CheckInService
         }
 
         /*
-         * Convert Base64 URL-safe:
-         *
-         * - menjadi +
-         * _ menjadi /
+         * Convert Base64URL -> Base64.
          */
         $base64 = strtr(
             $encodedPayload,
@@ -506,16 +570,10 @@ class CheckInService
         );
 
         /*
-         * Tambahkan padding Base64 SEBELUM decode.
-         *
-         * Ini penting.
-         *
-         * Jangan melakukan:
-         *
-         * base64_decode() -> lalu padding
-         *
-         * karena setelah decode variable tersebut
-         * sudah menjadi JSON string.
+         * =====================================================
+         * IMPORTANT:
+         * Padding HARUS dilakukan SEBELUM base64_decode().
+         * =====================================================
          */
         $padding = strlen($base64) % 4;
 
@@ -550,7 +608,10 @@ class CheckInService
             true
         );
 
-        if (!is_array($payload)) {
+        if (
+            !is_array($payload) ||
+            json_last_error() !== JSON_ERROR_NONE
+        ) {
             throw ValidationException::withMessages([
                 'qr_payload' => [
                     'Invalid QR payload.',
@@ -559,7 +620,7 @@ class CheckInService
         }
 
         /*
-         * Validate required event QR fields.
+         * Validate payload structure.
          */
         if (
             ($payload['type'] ?? null) !==
@@ -594,7 +655,10 @@ class CheckInService
     {
         $key = config('app.key');
 
-        if (!is_string($key) || $key === '') {
+        if (
+            !is_string($key) ||
+            $key === ''
+        ) {
             throw new \RuntimeException(
                 'Application key is not configured.'
             );

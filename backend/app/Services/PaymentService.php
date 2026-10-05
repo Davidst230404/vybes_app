@@ -100,10 +100,17 @@ class PaymentService
 
         $response = $xenditService->createQrisPayment($payment);
 
+        /*
+         * Xendit has only created the Payment Request at this point.
+         *
+         * The payment is NOT considered successful yet.
+         * provider_transaction_id must only be populated when
+         * Xendit sends a successful payment.capture webhook.
+         */
         $payment->update([
             'provider' => 'xendit',
             'provider_request_id' => $response['payment_request_id'] ?? null,
-            'provider_transaction_id' => $response['latest_payment_id'] ?? null,
+            'provider_transaction_id' => null,
             'method' => 'QRIS',
             'provider_payload' => $response,
         ]);
