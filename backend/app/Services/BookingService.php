@@ -25,11 +25,88 @@ class BookingService
             $endsAt,
             $quantity
         ) {
+            /*
+             * Basic input validation.
+             */
+            if ($quantity < 1) {
+                throw ValidationException::withMessages([
+                    'quantity' => [
+                        'The quantity must be at least 1.',
+                    ],
+                ]);
+            }
+
+            if ($startsAt >= $endsAt) {
+                throw ValidationException::withMessages([
+                    'ends_at' => [
+                        'The booking end time must be after the start time.',
+                    ],
+                ]);
+            }
+
+            /*
+             * Lock the resource row inside the same DB transaction
+             * used for the availability check and booking creation.
+             *
+             * This is important for preventing concurrent requests
+             * from both passing the same availability check.
+             */
             $resource = Resource::query()
+                ->with('venue.merchant')
                 ->whereKey($resource->id)
                 ->lockForUpdate()
                 ->firstOrFail();
 
+            /*
+             * Inactive resources must never be bookable.
+             */
+            if ($resource->status !== 'active') {
+                throw ValidationException::withMessages([
+                    'resource' => [
+                        'The selected resource is not available.',
+                    ],
+                ]);
+            }
+
+            /*
+             * Only published venues can receive bookings.
+             */
+            if (
+                !$resource->venue ||
+                $resource->venue->status !== 'published'
+            ) {
+                throw ValidationException::withMessages([
+                    'venue' => [
+                        'The selected venue is not available.',
+                    ],
+                ]);
+            }
+
+            /*
+             * Only approved merchants can expose
+             * their resources for booking.
+             */
+            if (
+                !$resource->venue->merchant ||
+                $resource->venue->merchant->status !== 'approved'
+            ) {
+                throw ValidationException::withMessages([
+                    'merchant' => [
+                        'The venue owner is not approved.',
+                    ],
+                ]);
+            }
+
+            /*
+             * Re-check availability while the resource row is locked.
+             *
+             * AvailabilityService also validates:
+             * - resource state
+             * - venue publication
+             * - merchant approval
+             * - operating schedule
+             * - conflicting held/confirmed bookings
+             */
             $availabilityService = app(AvailabilityService::class);
 
             if (!$availabilityService->isAvailable(
@@ -45,12 +122,14 @@ class BookingService
             }
 
             /*
-             * Get the price from the resource.
+             * Get the current price from the resource.
+             *
+             * The client-provided amount is intentionally not trusted.
              */
             $unitPrice = $resource->base_price;
 
             /*
-             * Calculate booking price.
+             * Calculate the amount on the server.
              */
             $subtotal = $unitPrice * $quantity;
             $totalAmount = $subtotal;
