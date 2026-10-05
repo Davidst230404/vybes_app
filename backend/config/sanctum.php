@@ -44,13 +44,21 @@ return [
     | Expiration Minutes
     |--------------------------------------------------------------------------
     |
-    | This value controls the number of minutes until an issued token will be
-    | considered expired. This will override any values set in the token's
-    | "expires_at" attribute, but first-party sessions are not affected.
+    | Access tokens expire after the configured number of minutes.
+    |
+    | Default:
+    | 43200 minutes = 30 days
+    |
+    | The value can be overridden through:
+    |
+    | SANCTUM_TOKEN_EXPIRATION
     |
     */
 
-    'expiration' => null,
+    'expiration' => (int) env(
+        'SANCTUM_TOKEN_EXPIRATION',
+        43200
+    ),
 
     /*
     |--------------------------------------------------------------------------
@@ -65,7 +73,10 @@ return [
     |
     */
 
-    'token_prefix' => env('SANCTUM_TOKEN_PREFIX', ''),
+    'token_prefix' => env(
+        'SANCTUM_TOKEN_PREFIX',
+        ''
+    ),
 
     /*
     |--------------------------------------------------------------------------
@@ -79,9 +90,14 @@ return [
     */
 
     'middleware' => [
-        'authenticate_session' => AuthenticateSession::class,
-        'encrypt_cookies' => EncryptCookies::class,
-        'validate_csrf_token' => ValidateCsrfToken::class,
+        'authenticate_session' =>
+            AuthenticateSession::class,
+
+        'encrypt_cookies' =>
+            EncryptCookies::class,
+
+        'validate_csrf_token' =>
+            ValidateCsrfToken::class,
     ],
 
 ];
