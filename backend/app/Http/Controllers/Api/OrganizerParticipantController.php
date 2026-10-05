@@ -43,6 +43,23 @@ class OrganizerParticipantController extends Controller
             ], 403);
         }
 
+        /*
+         * Security hardening:
+         * Organizer harus sudah approved sebelum dapat
+         * mengakses peserta/check-in event.
+         */
+        if ($organizer->status !== 'approved') {
+            return response()->json([
+                'message' => 'Organizer account is not approved.',
+            ], 403);
+        }
+
+        /*
+         * IDOR protection:
+         * organizer hanya boleh mengakses event miliknya sendiri.
+         *
+         * events.organizer_id -> organizers.id
+         */
         if (
             (int) $event->organizer_id !==
             (int) $organizer->id
@@ -71,6 +88,9 @@ class OrganizerParticipantController extends Controller
             return $authorizationError;
         }
 
+        /*
+         * Limit pagination untuk mencegah request yang terlalu besar.
+         */
         $perPage = min(
             max(
                 $request->integer('per_page', 20),
