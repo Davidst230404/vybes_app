@@ -12,6 +12,7 @@ use App\Services\PaymentRefundService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -22,11 +23,25 @@ class OrganizerEventController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $organizer = $request->user()->organizer;
+        $user = $request->user();
+
+        if (!$user->hasRole('organizer')) {
+            return response()->json([
+                'message' => 'Only organizers can manage events.',
+            ], 403);
+        }
+
+        $organizer = $user->organizer;
 
         if (!$organizer) {
             return response()->json([
                 'message' => 'Organizer profile not found.',
+            ], 403);
+        }
+
+        if ($organizer->status !== 'approved') {
+            return response()->json([
+                'message' => 'Organizer account is not approved.',
             ], 403);
         }
 
@@ -49,11 +64,25 @@ class OrganizerEventController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
-        $organizer = $request->user()->organizer;
+        $user = $request->user();
+
+        if (!$user->hasRole('organizer')) {
+            return response()->json([
+                'message' => 'Only organizers can manage events.',
+            ], 403);
+        }
+
+        $organizer = $user->organizer;
 
         if (!$organizer) {
             return response()->json([
                 'message' => 'Organizer profile not found.',
+            ], 403);
+        }
+
+        if ($organizer->status !== 'approved') {
+            return response()->json([
+                'message' => 'Organizer account is not approved.',
             ], 403);
         }
 
@@ -91,11 +120,6 @@ class OrganizerEventController extends Controller
                 'date',
                 'after:starts_at',
             ],
-
-            'status' => [
-                'nullable',
-                'in:draft,published,cancelled,completed',
-            ],
         ]);
 
         $event = Event::create([
@@ -114,7 +138,11 @@ class OrganizerEventController extends Controller
             'starts_at' => $validated['starts_at'],
             'ends_at' => $validated['ends_at'],
 
-            'status' => $validated['status'] ?? 'draft',
+            /*
+             * Publishing/cancellation/completion are controlled transitions.
+             * Client tidak boleh mengubah status secara langsung.
+             */
+            'status' => 'draft',
         ]);
 
         return response()->json([
@@ -211,11 +239,6 @@ class OrganizerEventController extends Controller
                 'sometimes',
                 'required',
                 'date',
-            ],
-
-            'status' => [
-                'sometimes',
-                'in:draft,published,cancelled,completed',
             ],
         ]);
 
@@ -391,7 +414,10 @@ class OrganizerEventController extends Controller
                     ]);
 
                     $payment = Payment::query()
-                        ->where('event_ticket_order_id', $order->id)
+                        ->where(
+                            'event_ticket_order_id',
+                            $order->id
+                        )
                         ->where('status', 'paid')
                         ->lockForUpdate()
                         ->first();
@@ -461,17 +487,11 @@ class OrganizerEventController extends Controller
                     continue;
                 }
 
-                /*
-                 * Gunakan positional arguments.
-                 *
-                 * Ini menghindari masalah IDE/static analyzer
-                 * terhadap named arguments.
-                 */
                 $refund = $refundService->createRefund(
                     payment: $payment,
-                     amount: (float) $payment->amount,
-                     reason: 'CANCELLATION'
-            );
+                    amount: (float) $payment->amount,
+                    reason: 'CANCELLATION'
+                );
 
                 $refunds[] = [
                     'payment_id' => $payment->id,
@@ -483,10 +503,19 @@ class OrganizerEventController extends Controller
                 /*
                  * Event tetap cancelled walaupun refund provider
                  * gagal.
+                 *
+                 * Detail exception hanya ditulis ke log server.
+                 * Jangan expose error internal/provider ke client.
                  */
+                Log::error('Organizer event refund failed.', [
+                    'event_id' => $event->id,
+                    'payment_id' => $paymentId,
+                    'exception' => $exception,
+                ]);
+
                 $refundFailures[] = [
                     'payment_id' => $paymentId,
-                    'message' => $exception->getMessage(),
+                    'message' => 'Refund processing failed. Please contact support.',
                 ];
             }
         }
@@ -647,6 +676,15 @@ class OrganizerEventController extends Controller
         if (!$organizer) {
             return response()->json([
                 'message' => 'Organizer profile not found.',
+            ], 403);
+        }
+
+        /*
+         * Organizer harus sudah approved.
+         */
+        if ($organizer->status !== 'approved') {
+            return response()->json([
+                'message' => 'Organizer account is not approved.',
             ], 403);
         }
 
