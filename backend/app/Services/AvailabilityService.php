@@ -16,7 +16,38 @@ class AvailabilityService
         Carbon $startsAt,
         Carbon $endsAt
     ): bool {
+        /*
+         * Invalid time range must never be considered available.
+         */
         if ($startsAt >= $endsAt) {
+            return false;
+        }
+
+        /*
+         * Never expose or allocate availability for resources
+         * that are not active.
+         */
+        if ($resource->status !== 'active') {
+            return false;
+        }
+
+        /*
+         * A resource is only bookable when its venue exists
+         * and is currently published.
+         */
+        $venue = $resource->venue;
+
+        if (!$venue || $venue->status !== 'published') {
+            return false;
+        }
+
+        /*
+         * A venue is only bookable when its merchant exists
+         * and has been approved.
+         */
+        $merchant = $venue->merchant;
+
+        if (!$merchant || $merchant->status !== 'approved') {
             return false;
         }
 
