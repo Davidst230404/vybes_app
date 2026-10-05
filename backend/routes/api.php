@@ -26,17 +26,18 @@ Route::prefix('auth')->group(function () {
     |--------------------------------------------------------------------------
     */
 
-    // Register
+    /*
+     * Rate limited untuk mengurangi brute-force login.
+     */
     Route::post(
         '/register',
         [AuthController::class, 'register']
-    );
+    )->middleware('throttle:auth-register');
 
-    // Login
     Route::post(
         '/login',
         [AuthController::class, 'login']
-    );
+    )->middleware('throttle:auth-login');
 
 
     /*
@@ -45,15 +46,16 @@ Route::prefix('auth')->group(function () {
     |--------------------------------------------------------------------------
     */
 
-    Route::middleware('auth:sanctum')->group(function () {
+    Route::middleware([
+        'auth:sanctum',
+        'throttle:api-user',
+    ])->group(function () {
 
-        // Get authenticated user
         Route::get(
             '/me',
             [AuthController::class, 'me']
         );
 
-        // Logout
         Route::post(
             '/logout',
             [AuthController::class, 'logout']
@@ -69,12 +71,17 @@ Route::prefix('auth')->group(function () {
 |
 | Public endpoint untuk mengecek availability resource.
 |
+| Rate limiting tetap dipasang karena endpoint ini dapat dipanggil
+| tanpa autentikasi.
+|
 */
 
 Route::get(
     '/resources/{resource}/availability',
     [AvailabilityController::class, 'check']
-);
+)
+    ->whereNumber('resource')
+    ->middleware('throttle:api-user');
 
 
 /*
@@ -92,7 +99,10 @@ Route::get(
 |
 */
 
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware([
+    'auth:sanctum',
+    'throttle:api-user',
+])->group(function () {
 
     /*
     |--------------------------------------------------------------------------
@@ -100,35 +110,30 @@ Route::middleware('auth:sanctum')->group(function () {
     |--------------------------------------------------------------------------
     */
 
-    // Get user's bookings
     Route::get(
         '/bookings',
         [BookingController::class, 'index']
     );
 
-    // Create booking hold
     Route::post(
         '/bookings',
         [BookingController::class, 'store']
     );
 
-    // Get booking detail
     Route::get(
         '/bookings/{booking}',
         [BookingController::class, 'show']
-    );
+    )->whereNumber('booking');
 
-    // Get digital ticket
     Route::get(
         '/bookings/{booking}/ticket',
         [BookingController::class, 'ticket']
-    );
+    )->whereNumber('booking');
 
-    // Create payment session
     Route::post(
         '/bookings/{booking}/payment-session',
         [PaymentController::class, 'createSession']
-    );
+    )->whereNumber('booking');
 
 
     /*
@@ -137,11 +142,10 @@ Route::middleware('auth:sanctum')->group(function () {
     |--------------------------------------------------------------------------
     */
 
-    // Check-in regular booking ticket
     Route::post(
         '/check-in',
         [CheckInController::class, 'checkIn']
-    );
+    )->middleware('throttle:api-check-in');
 });
 
 
@@ -154,7 +158,10 @@ Route::middleware('auth:sanctum')->group(function () {
 |
 */
 
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware([
+    'auth:sanctum',
+    'throttle:api-user',
+])->group(function () {
 
     /*
     |--------------------------------------------------------------------------
@@ -162,29 +169,25 @@ Route::middleware('auth:sanctum')->group(function () {
     |--------------------------------------------------------------------------
     */
 
-    // Create temporary ticket order / hold
     Route::post(
         '/events/{event}/ticket-orders',
         [EventTicketOrderController::class, 'store']
-    );
+    )->whereNumber('event');
 
-    // Get ticket order detail
     Route::get(
         '/event-ticket-orders/{order}',
         [EventTicketOrderController::class, 'show']
-    );
+    )->whereNumber('order');
 
-    // Cancel ticket order
     Route::post(
         '/event-ticket-orders/{order}/cancel',
         [EventTicketOrderController::class, 'cancel']
-    );
+    )->whereNumber('order');
 
-    // Create payment session for event ticket
     Route::post(
         '/event-ticket-orders/{order}/payment-session',
         [PaymentController::class, 'createEventTicketSession']
-    );
+    )->whereNumber('order');
 });
 
 
@@ -193,17 +196,18 @@ Route::middleware('auth:sanctum')->group(function () {
 | Organizer Events
 |--------------------------------------------------------------------------
 |
-| Organizer:
-| - List event
-| - Create event
-| - Detail event
-| - Update event
-| - Cancel event
-| - Reschedule event
+| Authorization detail dilakukan di controller:
+| - role organizer
+| - organizer profile
+| - organizer approval
+| - event ownership
 |
 */
 
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware([
+    'auth:sanctum',
+    'throttle:api-user',
+])->group(function () {
 
     /*
     |--------------------------------------------------------------------------
@@ -211,41 +215,35 @@ Route::middleware('auth:sanctum')->group(function () {
     |--------------------------------------------------------------------------
     */
 
-    // Get organizer events
     Route::get(
         '/organizer/events',
         [OrganizerEventController::class, 'index']
     );
 
-    // Create event
     Route::post(
         '/organizer/events',
         [OrganizerEventController::class, 'store']
     );
 
-    // Get event detail
     Route::get(
         '/organizer/events/{event}',
         [OrganizerEventController::class, 'show']
-    );
+    )->whereNumber('event');
 
-    // Update event
     Route::put(
         '/organizer/events/{event}',
         [OrganizerEventController::class, 'update']
-    );
+    )->whereNumber('event');
 
-    // Cancel event
     Route::post(
         '/organizer/events/{event}/cancel',
         [OrganizerEventController::class, 'cancel']
-    );
+    )->whereNumber('event');
 
-    // Reschedule event
     Route::put(
         '/organizer/events/{event}/reschedule',
         [OrganizerEventController::class, 'reschedule']
-    );
+    )->whereNumber('event');
 });
 
 
@@ -262,7 +260,10 @@ Route::middleware('auth:sanctum')->group(function () {
 |
 */
 
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware([
+    'auth:sanctum',
+    'throttle:api-user',
+])->group(function () {
 
     /*
     |--------------------------------------------------------------------------
@@ -270,29 +271,29 @@ Route::middleware('auth:sanctum')->group(function () {
     |--------------------------------------------------------------------------
     */
 
-    // Get ticket types
     Route::get(
         '/organizer/events/{event}/ticket-types',
         [OrganizerTicketTypeController::class, 'index']
-    );
+    )->whereNumber('event');
 
-    // Create ticket type
     Route::post(
         '/organizer/events/{event}/ticket-types',
         [OrganizerTicketTypeController::class, 'store']
-    );
+    )->whereNumber('event');
 
-    // Update ticket type
     Route::put(
         '/organizer/events/{event}/ticket-types/{ticketType}',
         [OrganizerTicketTypeController::class, 'update']
-    );
+    )
+        ->whereNumber('event')
+        ->whereNumber('ticketType');
 
-    // Delete ticket type
     Route::delete(
         '/organizer/events/{event}/ticket-types/{ticketType}',
         [OrganizerTicketTypeController::class, 'destroy']
-    );
+    )
+        ->whereNumber('event')
+        ->whereNumber('ticketType');
 });
 
 
@@ -309,40 +310,65 @@ Route::middleware('auth:sanctum')->group(function () {
 |
 */
 
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware([
+    'auth:sanctum',
+    'throttle:api-user',
+])->group(function () {
 
-    // Get participants for organizer event
+    /*
+    |--------------------------------------------------------------------------
+    | Participant Management
+    |--------------------------------------------------------------------------
+    */
+
     Route::get(
         '/organizer/events/{event}/participants',
         [OrganizerParticipantController::class, 'index']
-    );
+    )->whereNumber('event');
 
-    // Export participants CSV
     Route::get(
         '/organizer/events/{event}/participants/export',
         [OrganizerParticipantController::class, 'export']
-    );
+    )->whereNumber('event');
 
-    // Get participant detail
     Route::get(
         '/organizer/events/{event}/participants/{ticket}',
         [OrganizerParticipantController::class, 'show']
-    );
+    )
+        ->whereNumber('event')
+        ->whereNumber('ticket');
 
-    // Check-in participant
+    /*
+     * Check-in mempunyai limiter lebih ketat.
+     *
+     * Effective middleware:
+     * - auth:sanctum
+     * - throttle:api-user
+     * - throttle:api-check-in
+     */
     Route::post(
         '/organizer/events/{event}/participants/{ticket}/check-in',
         [OrganizerParticipantController::class, 'checkIn']
-    );
+    )
+        ->whereNumber('event')
+        ->whereNumber('ticket')
+        ->middleware('throttle:api-check-in');
 });
+
 
 /*
 |--------------------------------------------------------------------------
 | Xendit Webhook
 |--------------------------------------------------------------------------
 |
-| Endpoint ini TIDAK menggunakan auth:sanctum karena
-| request berasal dari Xendit.
+| Endpoint ini TIDAK menggunakan auth:sanctum karena request berasal
+| dari Xendit.
+|
+| Authentication dilakukan oleh XenditWebhookController menggunakan
+| x-callback-token.
+|
+| Jangan memasang throttle:api-user di sini karena webhook berasal
+| dari provider dan tidak memiliki Sanctum user.
 |
 */
 
