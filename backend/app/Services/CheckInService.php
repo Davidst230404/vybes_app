@@ -144,6 +144,19 @@ class CheckInService
             }
 
             /*
+             * Security hardening:
+             * hanya merchant yang sudah approved
+             * yang boleh melakukan check-in.
+             */
+            if ($merchant->status !== 'approved') {
+                throw ValidationException::withMessages([
+                    'merchant' => [
+                        'Merchant account is not approved.',
+                    ],
+                ]);
+            }
+
+            /*
              * Validate Merchant ownership.
              */
             if (
@@ -356,8 +369,14 @@ class CheckInService
              */
             $organizer = $user->organizer;
 
+            /*
+             * Security hardening:
+             * organizer harus ada, approved,
+             * dan memiliki event tersebut.
+             */
             if (
                 !$organizer ||
+                $organizer->status !== 'approved' ||
                 (int) $ticket->event->organizer_id !==
                 (int) $organizer->id
             ) {
