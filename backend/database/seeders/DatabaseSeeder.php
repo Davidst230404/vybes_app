@@ -16,6 +16,7 @@ class DatabaseSeeder extends Seeder
          VenueSeeder::class,
          ResourceSeeder::class,
          ScheduleSeeder::class,
+         AdminUserSeeder::class,
         ]);
     }
 }

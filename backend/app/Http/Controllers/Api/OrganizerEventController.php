@@ -481,11 +481,12 @@ class OrganizerEventController extends Controller
         foreach (array_unique($refundPaymentIds) as $paymentId) {
             try {
                 $payment = Payment::query()
-                    ->find($paymentId);
+                        ->whereKey((int) $paymentId)
+                        ->first();
 
-                if (!$payment) {
-                    continue;
-                }
+                        if (!$payment instanceof Payment) {
+                         continue;
+                    }
 
                 $refund = $refundService->createRefund(
                     payment: $payment,

@@ -10,6 +10,13 @@ use App\Http\Controllers\Api\OrganizerParticipantController;
 use App\Http\Controllers\Api\OrganizerTicketTypeController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\XenditWebhookController;
+use App\Http\Controllers\Api\Admin\ApprovalController;
+use App\Http\Controllers\Api\Admin\BookingController as AdminBookingController;
+use App\Http\Controllers\Api\Admin\CategoryController as AdminCategoryController;
+use App\Http\Controllers\Api\Admin\DashboardController;
+use App\Http\Controllers\Api\Admin\RefundController;
+use App\Http\Controllers\Api\Admin\UserController;
+use App\Http\Controllers\Api\Admin\VenueController as AdminVenueController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -376,3 +383,54 @@ Route::post(
     '/webhooks/xendit',
     [XenditWebhookController::class, 'handle']
 );
+
+/*
+|--------------------------------------------------------------------------
+| Admin CMS Routes
+|--------------------------------------------------------------------------
+|
+| Rute administratif untuk CMS platform VYBES.
+| Dilindungi oleh auth:sanctum dan middleware admin (memeriksa role admin / permission admin.manage).
+|
+*/
+
+Route::prefix('admin')
+    ->middleware([
+        'auth:sanctum',
+        'admin',
+        'throttle:api-user',
+    ])
+    ->group(function () {
+        // Dashboard Metrics
+        Route::get('/dashboard', [DashboardController::class, 'index']);
+
+        // Users Management
+        Route::get('/users', [UserController::class, 'index']);
+        Route::get('/users/{user}', [UserController::class, 'show'])->whereNumber('user');
+        Route::patch('/users/{user}', [UserController::class, 'update'])->whereNumber('user');
+
+        // Approvals (Merchants & Organizers)
+        Route::get('/approvals', [ApprovalController::class, 'index']);
+        Route::post('/approvals/merchants/{merchant}', [ApprovalController::class, 'updateMerchantStatus'])->whereNumber('merchant');
+        Route::post('/approvals/organizers/{organizer}', [ApprovalController::class, 'updateOrganizerStatus'])->whereNumber('organizer');
+
+        // Categories Management
+        Route::get('/categories', [AdminCategoryController::class, 'index']);
+        Route::post('/categories', [AdminCategoryController::class, 'store']);
+        Route::get('/categories/{category}', [AdminCategoryController::class, 'show'])->whereNumber('category');
+        Route::put('/categories/{category}', [AdminCategoryController::class, 'update'])->whereNumber('category');
+        Route::delete('/categories/{category}', [AdminCategoryController::class, 'destroy'])->whereNumber('category');
+
+        // Global Bookings Supervision
+        Route::get('/bookings', [AdminBookingController::class, 'index']);
+        Route::get('/bookings/{booking}', [AdminBookingController::class, 'show'])->whereNumber('booking');
+
+        // Refunds Management
+        Route::get('/refunds', [RefundController::class, 'index']);
+        Route::get('/refunds/{refund}', [RefundController::class, 'show'])->whereNumber('refund');
+        Route::post('/refunds', [RefundController::class, 'store']);
+
+        // Global Venues Supervision
+        Route::get('/venues', [AdminVenueController::class, 'index']);
+        Route::get('/venues/{venue}', [AdminVenueController::class, 'show'])->whereNumber('venue');
+    });

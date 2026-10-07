@@ -334,5 +334,5 @@ public function test_xendit_webhook_ignores_unknown_events(): void
             'message',
             'Webhook event ignored.'
         );
-}
+    }
 }
