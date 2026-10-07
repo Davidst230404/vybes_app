@@ -29,7 +29,7 @@ class CategoryController extends Controller
     /**
      * Store new category.
      */
-    public function store(StoreCategoryRequest $request): JsonResponse
+    public function store(StoreCategoryRequest $request, \App\Services\AuditLogger $auditLogger): JsonResponse
     {
         $validated = $request->validated();
 
@@ -45,6 +45,17 @@ class CategoryController extends Controller
         }
 
         $category = Category::create($validated);
+
+        $auditLogger->log(
+            actor: $request->user(),
+            action: 'category.create',
+            entityType: 'category',
+            entityId: $category->id,
+            metadata: [
+                'name' => $category->name,
+                'slug' => $category->slug,
+            ]
+        );
 
         return response()->json([
             'message' => 'Category created successfully.',
@@ -65,9 +76,10 @@ class CategoryController extends Controller
     /**
      * Update category.
      */
-    public function update(UpdateCategoryRequest $request, Category $category): JsonResponse
+    public function update(UpdateCategoryRequest $request, Category $category, \App\Services\AuditLogger $auditLogger): JsonResponse
     {
         $validated = $request->validated();
+        $oldName = $category->name;
 
         if (isset($validated['name']) && empty($validated['slug'])) {
             $baseSlug = Str::slug($validated['name']);
@@ -82,6 +94,18 @@ class CategoryController extends Controller
 
         $category->update($validated);
 
+        $auditLogger->log(
+            actor: $request->user(),
+            action: 'category.update',
+            entityType: 'category',
+            entityId: $category->id,
+            metadata: [
+                'old_name' => $oldName,
+                'new_name' => $category->name,
+                'updated_fields' => array_keys($validated),
+            ]
+        );
+
         return response()->json([
             'message' => 'Category updated successfully.',
             'data' => new CategoryResource($category->fresh()->loadCount('venues')),
@@ -91,7 +115,7 @@ class CategoryController extends Controller
     /**
      * Delete category if no venues are attached.
      */
-    public function destroy(Category $category): JsonResponse
+    public function destroy(Category $category, \App\Services\AuditLogger $auditLogger): JsonResponse
     {
         if ($category->venues()->exists()) {
             return response()->json([
@@ -99,7 +123,19 @@ class CategoryController extends Controller
             ], 422);
         }
 
+        $categoryId = $category->id;
+        $categoryName = $category->name;
         $category->delete();
+
+        $auditLogger->log(
+            actor: request()->user(),
+            action: 'category.delete',
+            entityType: 'category',
+            entityId: $categoryId,
+            metadata: [
+                'name' => $categoryName,
+            ]
+        );
 
         return response()->json([
             'message' => 'Category deleted successfully.',

@@ -61,9 +61,10 @@ class UserController extends Controller
     /**
      * Update user details and role.
      */
-    public function update(UpdateUserRequest $request, User $user): JsonResponse
+    public function update(UpdateUserRequest $request, User $user, \App\Services\AuditLogger $auditLogger): JsonResponse
     {
         $validated = $request->validated();
+        $oldRoleId = $user->role_id;
         $user->update($validated);
 
         $user->load([
@@ -71,6 +72,18 @@ class UserController extends Controller
             'merchant',
             'organizer',
         ]);
+
+        $auditLogger->log(
+            actor: $request->user(),
+            action: 'user.update',
+            entityType: 'user',
+            entityId: $user->id,
+            metadata: [
+                'updated_fields' => array_keys($validated),
+                'old_role_id' => $oldRoleId,
+                'new_role_id' => $user->role_id,
+            ]
+        );
 
         return response()->json([
             'message' => 'User updated successfully.',

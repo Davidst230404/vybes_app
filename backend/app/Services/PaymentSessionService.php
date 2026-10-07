@@ -49,7 +49,8 @@ class PaymentSessionService
                 return $existingSession;
             }
 
-            $paymentExpiresAt = now()->addMinutes(15);
+            $holdDuration = (int) \App\Models\PlatformSetting::get('booking_hold_duration_minutes', 15);
+            $paymentExpiresAt = now()->addMinutes($holdDuration);
 
             if (
                 $booking->hold_expires_at !== null &&
@@ -110,7 +111,8 @@ class PaymentSessionService
                 return $existingSession;
             }
 
-            $paymentExpiresAt = now()->addMinutes(15);
+            $holdDuration = (int) \App\Models\PlatformSetting::get('booking_hold_duration_minutes', 15);
+            $paymentExpiresAt = now()->addMinutes($holdDuration);
 
             if (
                 $order->hold_expires_at !== null &&

@@ -46,15 +46,33 @@ class RefundController extends Controller
     /**
      * Issue refund through existing PaymentRefundService.
      */
-    public function store(CreateRefundRequest $request, PaymentRefundService $refundService): JsonResponse
+    public function store(CreateRefundRequest $request, PaymentRefundService $refundService, \App\Services\AuditLogger $auditLogger): JsonResponse
     {
         $validated = $request->validated();
         $payment = Payment::findOrFail($validated['payment_id']);
 
-        $refund = $refundService->createRefund(
-            payment: $payment,
-            amount: isset($validated['amount']) ? (float) $validated['amount'] : null,
-            reason: $validated['reason'] ?? 'ADMIN_REFUND'
+        try {
+            $refund = $refundService->createRefund(
+                payment: $payment,
+                amount: isset($validated['amount']) ? (float) $validated['amount'] : null,
+                reason: $validated['reason'] ?? 'ADMIN_REFUND'
+            );
+        } catch (\RuntimeException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+
+        $auditLogger->log(
+            actor: $request->user(),
+            action: 'refund.create',
+            entityType: 'refund',
+            entityId: $refund->id,
+            metadata: [
+                'payment_id' => $payment->id,
+                'amount' => (float) $refund->amount,
+                'reason' => $refund->reason,
+            ]
         );
 
         return response()->json([

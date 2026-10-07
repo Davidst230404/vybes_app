@@ -11,9 +11,11 @@ use App\Http\Controllers\Api\OrganizerTicketTypeController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\XenditWebhookController;
 use App\Http\Controllers\Api\Admin\ApprovalController;
+use App\Http\Controllers\Api\Admin\AuditLogController;
 use App\Http\Controllers\Api\Admin\BookingController as AdminBookingController;
 use App\Http\Controllers\Api\Admin\CategoryController as AdminCategoryController;
 use App\Http\Controllers\Api\Admin\DashboardController;
+use App\Http\Controllers\Api\Admin\PlatformSettingController;
 use App\Http\Controllers\Api\Admin\RefundController;
 use App\Http\Controllers\Api\Admin\UserController;
 use App\Http\Controllers\Api\Admin\VenueController as AdminVenueController;
@@ -433,4 +435,11 @@ Route::prefix('admin')
         // Global Venues Supervision
         Route::get('/venues', [AdminVenueController::class, 'index']);
         Route::get('/venues/{venue}', [AdminVenueController::class, 'show'])->whereNumber('venue');
+
+        // Platform Settings (PRD BR-003, Section 5)
+        Route::get('/settings', [PlatformSettingController::class, 'index']);
+        Route::patch('/settings', [PlatformSettingController::class, 'update']);
+
+        // Audit Logs (PRD Section 6, 15.3, 15.4)
+        Route::get('/audit', [AuditLogController::class, 'index']);
     });

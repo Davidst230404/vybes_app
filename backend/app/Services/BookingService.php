@@ -147,7 +147,7 @@ class BookingService
                 'quantity' => $quantity,
                 'subtotal' => $subtotal,
                 'total_amount' => $totalAmount,
-                'hold_expires_at' => now()->addMinutes(15),
+                'hold_expires_at' => now()->addMinutes((int) \App\Models\PlatformSetting::get('booking_hold_duration_minutes', 15)),
             ]);
 
             /*

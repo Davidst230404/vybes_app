@@ -15,10 +15,10 @@ class XenditService
 
     public function __construct()
     {
-        $this->secretKey = config('services.xendit.secret_key');
+        $this->secretKey = (string) (config('services.xendit.secret_key') ?? '');
 
         $this->apiUrl = rtrim(
-            config('services.xendit.api_url'),
+            (string) (config('services.xendit.api_url') ?? ''),
             '/'
         );
 

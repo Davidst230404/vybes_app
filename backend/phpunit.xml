@@ -35,5 +35,7 @@
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
+        <env name="XENDIT_SECRET_KEY" value="xnd_development_test_key"/>
+        <env name="XENDIT_API_URL" value="https://api.xendit.co"/>
     </php>
 </phpunit>

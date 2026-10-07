@@ -89,7 +89,7 @@ class EventTicketPurchaseService
                 'unit_price' => $unitPrice,
                 'total_amount' => $totalAmount,
                 'status' => 'held',
-                'hold_expires_at' => now()->addMinutes(15),
+                'hold_expires_at' => now()->addMinutes((int) \App\Models\PlatformSetting::get('booking_hold_duration_minutes', 15)),
             ]);
 
             $ticketType->increment('reserved', $quantity);

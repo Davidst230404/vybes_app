@@ -3,8 +3,12 @@
 namespace Tests\Feature\Admin;
 
 use App\Models\Category;
+use App\Models\Merchant;
+use App\Models\Organizer;
+use App\Models\Payment;
 use App\Models\Role;
 use App\Models\User;
+use App\Models\Venue;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -177,5 +181,136 @@ class AdminApiTest extends TestCase
         $this->assertDatabaseMissing('categories', [
             'id' => $categoryId,
         ]);
+    }
+
+    /**
+     * Admin approval is idempotent and rejects arbitrary statuses.
+     */
+    public function test_admin_approval_is_idempotent_and_validates_status(): void
+    {
+        $admin = $this->createUserWithRole('admin');
+        $merchantUser = $this->createUserWithRole('merchant');
+
+        $merchant = Merchant::create([
+            'user_id' => $merchantUser->id,
+            'business_name' => 'Court Master',
+            'phone' => '081234567890',
+            'status' => 'pending',
+        ]);
+
+        // Invalid status injection rejected
+        $this->actingAs($admin)
+            ->postJson("/api/admin/approvals/merchants/{$merchant->id}", [
+                'status' => 'arbitrary_status',
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['status']);
+
+        // First approval: status changed to approved
+        $this->actingAs($admin)
+            ->postJson("/api/admin/approvals/merchants/{$merchant->id}", [
+                'status' => 'approved',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'approved');
+
+        // Repeated approval: idempotent early return
+        $repeatResponse = $this->actingAs($admin)
+            ->postJson("/api/admin/approvals/merchants/{$merchant->id}", [
+                'status' => 'approved',
+            ])
+            ->assertOk();
+
+        $repeatResponse->assertJsonPath('message', 'Merchant status is already approved.');
+    }
+
+    /**
+     * Refund fails with 422 when payment is not paid.
+     */
+    public function test_refund_fails_with_422_when_payment_is_not_paid(): void
+    {
+        $admin = $this->createUserWithRole('admin');
+        $customer = $this->createUserWithRole('customer');
+
+        $payment = Payment::create([
+            'payment_code' => 'VYB-PAY-TEST123',
+            'payment_session_id' => null,
+            'provider' => 'xendit',
+            'provider_request_id' => 'req_test_123',
+            'status' => 'pending', // Unpaid
+            'amount' => 150000,
+            'currency' => 'IDR',
+        ]);
+
+        $response = $this->actingAs($admin)
+            ->postJson('/api/admin/refunds', [
+                'payment_id' => $payment->id,
+                'amount' => 150000,
+                'reason' => 'CUSTOMER_REQUEST',
+            ])
+            ->assertStatus(422);
+
+        $response->assertJsonPath('message', 'Only paid payments can be refunded.');
+    }
+
+    /**
+     * Category deletion fails when venues are assigned.
+     */
+    public function test_category_deletion_fails_when_venues_are_assigned(): void
+    {
+        $admin = $this->createUserWithRole('admin');
+        $merchantUser = $this->createUserWithRole('merchant');
+
+        $merchant = Merchant::create([
+            'user_id' => $merchantUser->id,
+            'business_name' => 'Arena Sport',
+            'phone' => '081234567891',
+            'status' => 'approved',
+        ]);
+
+        $category = Category::create([
+            'name' => 'Basketball Gym',
+            'slug' => 'basketball-gym',
+            'is_active' => true,
+            'sort_order' => 1,
+        ]);
+
+        Venue::create([
+            'merchant_id' => $merchant->id,
+            'category_id' => $category->id,
+            'name' => 'Downtown Gym',
+            'slug' => 'downtown-gym',
+            'status' => 'published',
+            'address' => 'Jl. Olahraga No. 1',
+            'city' => 'Jakarta',
+            'province' => 'DKI Jakarta',
+        ]);
+
+        $this->actingAs($admin)
+            ->deleteJson("/api/admin/categories/{$category->id}")
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Cannot delete category that is currently assigned to venues.');
+    }
+
+    /**
+     * User update ignores arbitrary fields and cannot inject status or password.
+     */
+    public function test_user_update_prevents_arbitrary_field_and_status_injection(): void
+    {
+        $admin = $this->createUserWithRole('admin');
+        $customer = $this->createUserWithRole('customer');
+        $originalPassword = $customer->password;
+
+        $this->actingAs($admin)
+            ->patchJson("/api/admin/users/{$customer->id}", [
+                'name' => 'Safe Name',
+                'status' => 'suspended', // Non-existent column / unvalidated field
+                'password' => 'new_hacked_password', // Not in FormRequest rules
+            ])
+            ->assertOk();
+
+        $customer->refresh();
+        $this->assertSame('Safe Name', $customer->name);
+        $this->assertSame($originalPassword, $customer->password);
     }
 }
