@@ -10,6 +10,21 @@ jobs:
   laravel-tests:
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: vybes_testing
+          POSTGRES_USER: vybes
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     defaults:
       run:
         working-directory: backend
@@ -22,7 +37,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: "8.3"
-          extensions: mbstring, xml, ctype, iconv, pdo_sqlite, sqlite3
+          extensions: mbstring, xml, ctype, iconv, pdo_pgsql, pgsql, pdo_sqlite, sqlite3, bcmath
           coverage: none
 
       - name: Copy environment
@@ -34,16 +49,18 @@ jobs:
       - name: Generate application key
         run: php artisan key:generate
 
-      - name: Prepare SQLite database
-        run: |
-          mkdir -p database
-          touch database/database.sqlite
+      - name: Directory permissions
+        run: chmod -R 777 storage bootstrap/cache
 
       - name: Run Laravel tests
         env:
           APP_ENV: testing
-          DB_CONNECTION: sqlite
-          DB_DATABASE: database/database.sqlite
+          DB_CONNECTION: pgsql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 5433
+          DB_DATABASE: vybes_testing
+          DB_USERNAME: vybes
+          DB_PASSWORD: ""
           CACHE_STORE: array
           SESSION_DRIVER: array
           QUEUE_CONNECTION: sync
