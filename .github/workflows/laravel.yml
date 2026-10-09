@@ -1,13 +1,15 @@
-name: Laravel Tests
+name: Laravel Tests & CI Pipeline
 
 on:
   push:
     branches: ["main"]
   pull_request:
     branches: ["main"]
+  workflow_dispatch:
 
 jobs:
   laravel-tests:
+    name: Run Laravel Test Suite & Migrations
     runs-on: ubuntu-latest
 
     services:
@@ -37,8 +39,19 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: "8.3"
-          extensions: mbstring, xml, ctype, iconv, pdo_pgsql, pgsql, pdo_sqlite, sqlite3, bcmath
+          extensions: mbstring, xml, ctype, iconv, pdo_pgsql, pgsql, bcmath, json, curl
           coverage: none
+
+      - name: Get Composer Cache Directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-${{ hashFiles('backend/composer.lock') }}
+          restore-keys: ${{ runner.os }}-composer-
 
       - name: Copy environment
         run: php -r "file_exists('.env') || copy('.env.example', '.env');"
@@ -52,7 +65,33 @@ jobs:
       - name: Directory permissions
         run: chmod -R 777 storage bootstrap/cache
 
-      - name: Run Laravel tests
+      - name: Validate configuration and routing
+        env:
+          APP_ENV: testing
+          DB_CONNECTION: pgsql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 5433
+          DB_DATABASE: vybes_testing
+          DB_USERNAME: vybes
+          DB_PASSWORD: ""
+        run: |
+          php artisan config:cache
+          php artisan route:cache
+          php artisan config:clear
+          php artisan route:clear
+
+      - name: Verify database migrations and seeders
+        env:
+          APP_ENV: testing
+          DB_CONNECTION: pgsql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 5433
+          DB_DATABASE: vybes_testing
+          DB_USERNAME: vybes
+          DB_PASSWORD: ""
+        run: php artisan migrate:fresh --seed --force
+
+      - name: Run Admin CMS Feature Tests (User Management, RBAC, Approvals, Audit Logs, Settings)
         env:
           APP_ENV: testing
           DB_CONNECTION: pgsql
@@ -67,4 +106,38 @@ jobs:
           MAIL_MAILER: array
           XENDIT_SECRET_KEY: xnd_development_test_key
           XENDIT_API_URL: https://api.xendit.co
-        run: php artisan test
+        run: php artisan test tests/Feature/Admin --colors=always
+
+      - name: Run Security Hardening Tests (Anti-Tamper, Rate Limiting, RBAC)
+        env:
+          APP_ENV: testing
+          DB_CONNECTION: pgsql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 5433
+          DB_DATABASE: vybes_testing
+          DB_USERNAME: vybes
+          DB_PASSWORD: ""
+          CACHE_STORE: array
+          SESSION_DRIVER: array
+          QUEUE_CONNECTION: sync
+          MAIL_MAILER: array
+          XENDIT_SECRET_KEY: xnd_development_test_key
+          XENDIT_API_URL: https://api.xendit.co
+        run: php artisan test tests/Feature/SecurityHardeningTest.php --colors=always
+
+      - name: Run Full Automated Test Suite (Unit and Feature tests)
+        env:
+          APP_ENV: testing
+          DB_CONNECTION: pgsql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 5433
+          DB_DATABASE: vybes_testing
+          DB_USERNAME: vybes
+          DB_PASSWORD: ""
+          CACHE_STORE: array
+          SESSION_DRIVER: array
+          QUEUE_CONNECTION: sync
+          MAIL_MAILER: array
+          XENDIT_SECRET_KEY: xnd_development_test_key
+          XENDIT_API_URL: https://api.xendit.co
+        run: php artisan test --colors=always
