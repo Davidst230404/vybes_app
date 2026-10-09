@@ -103,8 +103,46 @@ Middleware Stack: `auth:sanctum`, `admin` (`Role: admin` / `Permission: admin.ma
 - **METHOD:** `GET`
 - **PATH:** `/api/admin/approvals`
 - **AUTHORIZATION:** `admin`
-- **RESPONSE (200 OK):** Pending merchants and organizers lists with profile details.
-- **ERRORS:** `401`, `403`
+- **RESPONSE (200 OK):**
+  ```json
+  {
+    "data": {
+      "merchants": [
+        {
+          "id": 1,
+          "user_id": 5,
+          "business_name": "Champion Sports Arena",
+          "phone": "08123456789",
+          "status": "pending",
+          "created_at": "2026-10-01T10:00:00.000000Z",
+          "updated_at": "2026-10-01T10:00:00.000000Z",
+          "user": {
+            "id": 5,
+            "name": "Budi Hartono",
+            "email": "budi@arena.com"
+          }
+        }
+      ],
+      "organizers": [
+        {
+          "id": 1,
+          "user_id": 8,
+          "organization_name": "Soundfest Asia",
+          "phone": "08198765432",
+          "status": "pending",
+          "created_at": "2026-10-01T11:00:00.000000Z",
+          "updated_at": "2026-10-01T11:00:00.000000Z",
+          "user": {
+            "id": 8,
+            "name": "Sarah Connor",
+            "email": "sarah@soundfest.com"
+          }
+        }
+      ]
+    }
+  }
+  ```
+- **ERRORS:** `401 Unauthorized`, `403 Forbidden`
 
 #### `POST /api/admin/approvals/merchants/{merchant}`
 - **METHOD:** `POST`
@@ -116,7 +154,25 @@ Middleware Stack: `auth:sanctum`, `admin` (`Role: admin` / `Permission: admin.ma
     "status": "approved" // or "rejected"
   }
   ```
-- **RESPONSE (200 OK):** Updated merchant record.
+- **RESPONSE (200 OK):**
+  ```json
+  {
+    "data": {
+      "id": 1,
+      "user_id": 5,
+      "business_name": "Champion Sports Arena",
+      "phone": "08123456789",
+      "status": "approved",
+      "created_at": "2026-10-01T10:00:00.000000Z",
+      "updated_at": "2026-10-09T03:30:00.000000Z",
+      "user": {
+        "id": 5,
+        "name": "Budi Hartono",
+        "email": "budi@arena.com"
+      }
+    }
+  }
+  ```
 - **SIDE EFFECTS:** Updates `merchants.approval_status`. Enables inventory publication boundary (PRD BR-013).
 - **AUDIT REQUIREMENT:** Logged as `merchant.status_update` with before/after state.
 
@@ -130,7 +186,25 @@ Middleware Stack: `auth:sanctum`, `admin` (`Role: admin` / `Permission: admin.ma
     "status": "approved" // or "rejected"
   }
   ```
-- **RESPONSE (200 OK):** Updated organizer record.
+- **RESPONSE (200 OK):**
+  ```json
+  {
+    "data": {
+      "id": 1,
+      "user_id": 8,
+      "organization_name": "Soundfest Asia",
+      "phone": "08198765432",
+      "status": "approved",
+      "created_at": "2026-10-01T11:00:00.000000Z",
+      "updated_at": "2026-10-09T03:30:00.000000Z",
+      "user": {
+        "id": 8,
+        "name": "Sarah Connor",
+        "email": "sarah@soundfest.com"
+      }
+    }
+  }
+  ```
 - **SIDE EFFECTS:** Updates `organizers.approval_status`. Enables event publication boundary.
 - **AUDIT REQUIREMENT:** Logged as `organizer.status_update` with before/after state.
 

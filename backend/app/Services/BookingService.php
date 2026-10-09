@@ -170,6 +170,20 @@ class BookingService
         });
     }
 
+    /**
+     * Expire booking holds that have passed their expiration timestamp.
+     */
+    public function expireHolds(): int
+    {
+        return Booking::query()
+            ->where('status', 'held')
+            ->whereNotNull('hold_expires_at')
+            ->where('hold_expires_at', '<=', now())
+            ->update([
+                'status' => 'expired',
+            ]);
+    }
+
     private function generateBookingCode(): string
     {
         do {

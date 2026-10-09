@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\ApprovalRequest;
+use App\Http\Resources\Admin\MerchantResource;
+use App\Http\Resources\Admin\OrganizerResource;
 use App\Models\Merchant;
 use App\Models\Organizer;
 use Illuminate\Http\JsonResponse;
@@ -30,8 +32,8 @@ class ApprovalController extends Controller
 
         return response()->json([
             'data' => [
-                'merchants' => $merchants,
-                'organizers' => $organizers,
+                'merchants' => MerchantResource::collection($merchants),
+                'organizers' => OrganizerResource::collection($organizers),
             ],
         ]);
     }
@@ -47,7 +49,7 @@ class ApprovalController extends Controller
         if ($oldStatus === $validated['status']) {
             return response()->json([
                 'message' => "Merchant status is already {$validated['status']}.",
-                'data' => $merchant->load('user'),
+                'data' => new MerchantResource($merchant->load('user')),
             ]);
         }
 
@@ -67,7 +69,7 @@ class ApprovalController extends Controller
 
         return response()->json([
             'message' => "Merchant status updated to {$validated['status']}.",
-            'data' => $merchant->load('user'),
+            'data' => new MerchantResource($merchant->load('user')),
         ]);
     }
 
@@ -82,7 +84,7 @@ class ApprovalController extends Controller
         if ($oldStatus === $validated['status']) {
             return response()->json([
                 'message' => "Organizer status is already {$validated['status']}.",
-                'data' => $organizer->load('user'),
+                'data' => new OrganizerResource($organizer->load('user')),
             ]);
         }
 
@@ -102,7 +104,7 @@ class ApprovalController extends Controller
 
         return response()->json([
             'message' => "Organizer status updated to {$validated['status']}.",
-            'data' => $organizer->load('user'),
+            'data' => new OrganizerResource($organizer->load('user')),
         ]);
     }
 }

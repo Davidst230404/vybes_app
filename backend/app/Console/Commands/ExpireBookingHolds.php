@@ -2,7 +2,7 @@
 
 namespace App\Console\Commands;
 
-use App\Models\Booking;
+use App\Services\BookingService;
 use Illuminate\Console\Command;
 
 class ExpireBookingHolds extends Command
@@ -11,15 +11,9 @@ class ExpireBookingHolds extends Command
 
     protected $description = 'Expire booking holds that have passed their expiration time';
 
-    public function handle(): int
+    public function handle(BookingService $bookingService): int
     {
-        $expiredCount = Booking::query()
-            ->where('status', 'held')
-            ->whereNotNull('hold_expires_at')
-            ->where('hold_expires_at', '<=', now())
-            ->update([
-                'status' => 'expired',
-            ]);
+        $expiredCount = $bookingService->expireHolds();
 
         $this->info(
             "Expired {$expiredCount} booking hold(s)."
