@@ -57,21 +57,21 @@ This report evaluates the production-readiness of all 12 Admin CMS functional mo
 
 ### 3.2 User Management
 - **Requirement / Source:** PRD v1.2.4 Section 5.2 & FR-015
-- **Actual Implementation:** `App\Http\Controllers\Api\Admin\UserController@index, show, update`
+- **Actual Implementation:** `App\Http\Controllers\Api\Admin\UserController@index, show, update, suspend, reactivate`
 - **API Endpoints:**
-  - `GET /api/admin/users`
-  - `GET /api/admin/users/{user}`
+  - `GET /api/admin/users` (supports search by name, email, phone; filter by status and role; pagination)
+  - `GET /api/admin/users/{user}` (returns phone, status, role, permissions, timestamps)
   - `PATCH /api/admin/users/{user}`
+  - `POST /api/admin/users/{user}/suspend` (revokes tokens, blocks login, guarded against self-suspension and last-admin)
+  - `POST /api/admin/users/{user}/reactivate` (restores account status)
 - **Service / Domain Dependency:** Eloquent with `AuditLogger`.
 - **Authorization:** `auth:sanctum` + `admin` middleware.
 - **Test Coverage:**
-  - `test_admin_can_list_users`
-  - `test_admin_can_view_user_detail`
-  - `test_admin_can_update_user_role`
-  - `test_admin_user_role_update_is_audited`
+  - `AdminApiTest.php` (basic user listing and updates)
+  - `AdminUserManagementTest.php` (10 tests: name/email/phone search, detail, suspend, reactivate, self-suspension guard, last-admin guard, token revocation, login blocking, audit logging, non-admin forbidden)
 - **Known Limitations:**
-  - **GAP-01 (User Suspension):** The `users` database table does not possess a `status` column. Implementing suspension without an approved contract risks orphaned Sanctum tokens, unhandled booking/ticket cancellations, and inconsistent authentication checks.
-- **Readiness Status:** `READY WITH DOCUMENTED LIMITATIONS`
+  - GAP-01 (User Suspension): **RESOLVED** in Phase 8.1 Section 02. Database migration added `status` and `phone` columns, login middleware blocks suspended users, Sanctum tokens revoked on suspension, self-suspension & last-admin protected, full audit logging implemented.
+- **Readiness Status:** `PRODUCTION READY`
 
 ---
 

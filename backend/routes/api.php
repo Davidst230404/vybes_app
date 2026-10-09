@@ -410,6 +410,8 @@ Route::prefix('admin')
         Route::get('/users', [UserController::class, 'index']);
         Route::get('/users/{user}', [UserController::class, 'show'])->whereNumber('user');
         Route::patch('/users/{user}', [UserController::class, 'update'])->whereNumber('user');
+        Route::post('/users/{user}/suspend', [UserController::class, 'suspend'])->whereNumber('user');
+        Route::post('/users/{user}/reactivate', [UserController::class, 'reactivate'])->whereNumber('user');
 
         // Approvals (Merchants & Organizers)
         Route::get('/approvals', [ApprovalController::class, 'index']);

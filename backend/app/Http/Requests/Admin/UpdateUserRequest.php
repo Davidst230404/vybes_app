@@ -25,6 +25,8 @@ class UpdateUserRequest extends FormRequest
                 Rule::unique('users', 'email')->ignore($userId),
             ],
             'role_id' => ['sometimes', 'nullable', 'integer', 'exists:roles,id'],
+            'phone' => ['sometimes', 'nullable', 'string', 'max:30'],
+            'status' => ['sometimes', 'string', Rule::in(['active', 'suspended'])],
         ];
     }
 }

@@ -103,11 +103,14 @@ class AdminApiTest extends TestCase
             'data' => [
                 'metrics' => [
                     'total_users',
+                    'total_merchants',
                     'total_bookings',
                     'confirmed_bookings',
+                    'total_transactions',
                     'total_venues',
                     'total_events',
                     'total_revenue',
+                    'platform_revenue',
                     'total_refunds',
                     'pending_approvals',
                 ],
@@ -115,6 +118,13 @@ class AdminApiTest extends TestCase
                     'merchants',
                     'organizers',
                 ],
+                'operational_summary' => [
+                    'approved_merchants',
+                    'approved_organizers',
+                    'active_venues',
+                    'upcoming_bookings',
+                ],
+                'recent_activity',
             ],
         ]);
     }

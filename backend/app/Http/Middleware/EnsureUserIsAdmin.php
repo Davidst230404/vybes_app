@@ -22,6 +22,12 @@ class EnsureUserIsAdmin
             ], 401);
         }
 
+        if ($user->isSuspended()) {
+            return response()->json([
+                'message' => 'Your account has been suspended. Please contact platform administration.',
+            ], 403);
+        }
+
         if (!$user->hasRole('admin') && !$user->hasPermission('admin.manage')) {
             return response()->json([
                 'message' => 'You do not have permission to access the VYBES Admin CMS.',

@@ -50,24 +50,29 @@ Middleware Stack: `auth:sanctum`, `admin` (`Role: admin` / `Permission: admin.ma
 - **QUERY PARAMETERS:**
   - `page` (integer, optional)
   - `per_page` (integer, optional, default: 15, max: 100)
-  - `search` (string, optional, searches `name` and `email`)
+  - `search` (string, optional, searches `name`, `email`, and `phone`)
+  - `status` (string, optional, `'active'` | `'suspended'`)
   - `role_id` (integer, optional)
+  - `role` (string, optional)
 - **RESPONSE (200 OK):**
   ```json
   {
     "data": [
       {
         "id": 1,
-        "name": "David Stanley",
-        "email": "david@vybes.local",
+        "name": "David Pratama",
+        "email": "david.pratama@example.com",
+        "phone": "081234567821",
+        "status": "active",
+        "email_verified_at": "2026-09-27T14:43:37.000000Z",
         "role_id": 1,
-        "role": { "id": 1, "name": "admin", "display_name": "Administrator" },
-        "created_at": "2026-10-01T08:00:00.000000Z",
-        "updated_at": "2026-10-01T08:00:00.000000Z"
+        "role": { "id": 1, "name": "customer", "display_name": "Customer" },
+        "created_at": "2026-09-12T10:00:00.000000Z",
+        "updated_at": "2026-09-12T10:00:00.000000Z"
       }
     ],
     "links": { "first": "...", "last": "...", "prev": null, "next": "..." },
-    "meta": { "current_page": 1, "from": 1, "last_page": 10, "per_page": 15, "to": 15, "total": 150 }
+    "meta": { "current_page": 1, "from": 1, "last_page": 1, "per_page": 15, "to": 4, "total": 4 }
   }
   ```
 - **ERRORS:** `401 Unauthorized`, `403 Forbidden`
@@ -77,8 +82,8 @@ Middleware Stack: `auth:sanctum`, `admin` (`Role: admin` / `Permission: admin.ma
 - **METHOD:** `GET`
 - **PATH:** `/api/admin/users/{user}`
 - **AUTHORIZATION:** `admin`
-- **RESPONSE (200 OK):** User details including role and timestamps.
-- **ERRORS:** `401`, `403`, `404 Not Found`
+- **RESPONSE (200 OK):** User details including `status`, `phone`, role with permissions, merchant, organizer, and timestamps.
+- **ERRORS:** `401 Unauthorized`, `403 Forbidden`, `404 Not Found`
 
 #### `PATCH /api/admin/users/{user}`
 - **METHOD:** `PATCH`
@@ -88,13 +93,66 @@ Middleware Stack: `auth:sanctum`, `admin` (`Role: admin` / `Permission: admin.ma
   ```json
   {
     "name": "Jane Doe",
-    "role_id": 2
+    "role_id": 2,
+    "phone": "081234567890",
+    "status": "active"
   }
   ```
 - **RESPONSE (200 OK):** Updated user object.
 - **ERRORS:** `401`, `403`, `404`, `422 Validation Error`
 - **SIDE EFFECTS:** Updates user row in database.
-- **AUDIT REQUIREMENT:** Logged as `user.role_update` in `audit_logs` table with actor and before/after metadata.
+- **AUDIT REQUIREMENT:** Logged as `user.update` in `audit_logs` table with actor and before/after metadata.
+
+#### `POST /api/admin/users/{user}/suspend`
+- **METHOD:** `POST`
+- **PATH:** `/api/admin/users/{user}/suspend`
+- **AUTHORIZATION:** `admin`
+- **REQUEST (JSON, optional):**
+  ```json
+  {
+    "reason": "Violation of terms"
+  }
+  ```
+- **RESPONSE (200 OK):**
+  ```json
+  {
+    "message": "User account suspended successfully.",
+    "data": { ... }
+  }
+  ```
+- **ERRORS:**
+  - `401 Unauthorized`: Not logged in.
+  - `403 Forbidden`: Authenticated user is not an administrator.
+  - `404 Not Found`: User does not exist.
+  - `422 Unprocessable Content`:
+    - Admin attempting self-suspension (`"You cannot suspend your own administrative account."`).
+    - Attempting to suspend the last active administrator (`"Cannot suspend the last active administrator."`).
+- **SIDE EFFECTS:**
+  - Updates `users.status` to `'suspended'`.
+  - Revokes all active personal access tokens (`$user->tokens()->delete()`).
+  - Blocks subsequent login attempts with 422 error.
+- **AUDIT REQUIREMENT:** Recorded as `user.suspend` in `audit_logs` with before/after state.
+
+#### `POST /api/admin/users/{user}/reactivate`
+- **METHOD:** `POST`
+- **PATH:** `/api/admin/users/{user}/reactivate`
+- **AUTHORIZATION:** `admin`
+- **REQUEST (JSON, optional):**
+  ```json
+  {
+    "reason": "Administrative reactivation"
+  }
+  ```
+- **RESPONSE (200 OK):**
+  ```json
+  {
+    "message": "User account reactivated successfully.",
+    "data": { ... }
+  }
+  ```
+- **ERRORS:** `401`, `403`, `404`
+- **SIDE EFFECTS:** Sets `users.status` to `'active'`.
+- **AUDIT REQUIREMENT:** Recorded as `user.reactivate` in `audit_logs` with before/after state.
 
 ---
 

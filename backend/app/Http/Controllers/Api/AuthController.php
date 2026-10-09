@@ -54,6 +54,12 @@ class AuthController extends Controller
             ]);
         }
 
+        if ($user->isSuspended()) {
+            throw ValidationException::withMessages([
+                'email' => ['Your account has been suspended. Please contact platform administration.'],
+            ]);
+        }
+
         $token = $user->createToken('vybes-mobile')->plainTextToken;
 
         return response()->json([
